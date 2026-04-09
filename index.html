@@ -139,6 +139,32 @@ header h1{font-size:16px;font-weight:600;letter-spacing:.3px}
 
 .sep{height:1px;background:var(--borda);margin:8px 0}
 .hidden{display:none!important}
+
+/* ── Fichas IR ── */
+.ficha-card{border:1px solid var(--borda);border-radius:8px;margin-bottom:14px;overflow:hidden}
+.ficha-header{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--azul-bg);border-bottom:1px solid var(--borda)}
+.ficha-num{background:var(--azul);color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;white-space:nowrap}
+.ficha-header h4{flex:1;font-size:13px;font-weight:600;margin:0}
+.ficha-total{font-size:13px;font-weight:700;color:var(--azul);white-space:nowrap}
+.ficha-table{width:100%;border-collapse:collapse;font-size:12px}
+.ficha-table th{background:var(--cinza);padding:7px 10px;text-align:left;font-weight:600;color:var(--texto2);border-bottom:1px solid var(--borda)}
+.ficha-table td{padding:7px 10px;border-bottom:1px solid var(--borda)}
+.ficha-table tr:last-child td{border-bottom:none}
+.ficha-table tr:hover td{background:var(--azul-bg)}
+.ficha-empty{padding:14px;text-align:center;color:var(--texto2);font-size:12px}
+.ficha-total-row{background:var(--verde-bg)!important}
+.ficha-total-row td{font-weight:700;color:var(--verde)}
+
+/* ── Checklist ── */
+.chk-list{list-style:none;padding:0}
+.chk-item{display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid var(--borda);font-size:12px}
+.chk-item:last-child{border-bottom:none}
+.chk-ic{font-size:16px;flex-shrink:0;margin-top:1px}
+.chk-txt strong{display:block;font-size:12px;font-weight:600}
+.chk-txt span{color:var(--texto2);font-size:11px}
+
+/* ── Modal fichas grande ── */
+.modal-fichas{background:#fff;border-radius:12px;padding:24px;width:100%;max-width:860px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)}
 @keyframes spin{to{transform:rotate(360deg)}}
 .spin{display:inline-block;width:12px;height:12px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;animation:spin .6s linear infinite}
 </style>
@@ -181,6 +207,17 @@ header h1{font-size:16px;font-weight:600;letter-spacing:.3px}
 
 <!-- ═══════════════════ TOAST ═══════════════════ -->
 <div id="toast"></div>
+
+<!-- ═══════════════════ MODAL: FICHAS IR ═══════════════════ -->
+<div class="overlay hidden" id="ov-fichas">
+  <div class="modal-fichas">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
+      <h3 style="font-size:16px">📊 Resumo por Fichas do IR</h3>
+      <button class="btn btn-ghost" onclick="fechar('ov-fichas')">✕ Fechar</button>
+    </div>
+    <div id="fichas-content"></div>
+  </div>
+</div>
 
 <!-- ═══════════════════ MODAL: CONFIG API ═══════════════════ -->
 <div class="overlay hidden" id="ov-cfg">
@@ -364,6 +401,7 @@ function renderMain() {
       <div class="card-header">
         <h3>👤 ${clienteAtivo.nome} · ${clienteAtivo.ano}</h3>
         <div class="card-actions">
+          <button class="btn btn-primary" onclick="abrirFichas()">📊 Fichas IR</button>
           <button class="btn btn-verde" onclick="exportarExcel()">⬇ Excel</button>
           <button class="btn btn-vermelho btn-ghost" onclick="removerCliente('${clienteAtivo.id}')">Remover</button>
         </div>
@@ -856,6 +894,215 @@ function toast(msg, tipo='info') {
 
 // Fechar overlay clicando fora
 document.querySelectorAll('.overlay').forEach(o => o.addEventListener('click', e => { if (e.target === o) o.classList.add('hidden'); }));
+document.getElementById('ov-fichas').addEventListener('click', e => { if (e.target === document.getElementById('ov-fichas')) fechar('ov-fichas'); });
+
+// ════════════════════════════════════════════════════
+// FICHAS IR — RESUMO + TOTALIZADORES + CHECKLIST
+// ════════════════════════════════════════════════════
+function abrirFichas() {
+  const docs = DB.docs.filter(d => d.clienteId === clienteAtivo.id && d.dados && ['ok','revisado'].includes(d.status));
+  document.getElementById('fichas-content').innerHTML = gerarFichasHTML(docs);
+  abrir('ov-fichas');
+}
+
+function fmt(v) {
+  return (v||0).toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
+}
+
+function gerarFichasHTML(docs) {
+  const informes = docs.filter(d => d.tipo === 'informe_rendimentos');
+  const medicos  = docs.filter(d => d.tipo === 'recibo_medico');
+  const educacao = docs.filter(d => d.tipo === 'recibo_educacao');
+  const notas    = docs.filter(d => d.tipo === 'nota_corretagem');
+
+  // Totais
+  const totRendTrib   = informes.reduce((s,d) => s + (d.dados.rendimentos_tributaveis||0), 0);
+  const totIRRF       = informes.reduce((s,d) => s + (d.dados.irrf_retido||0), 0);
+  const totPrevOfic   = informes.reduce((s,d) => s + (d.dados.previdencia_oficial||0), 0);
+  const totPrevPriv   = informes.reduce((s,d) => s + (d.dados.previdencia_privada||0), 0);
+  const totIsentos    = informes.reduce((s,d) => s + (d.dados.rendimentos_isentos||0), 0);
+  const totMedicos    = medicos.reduce((s,d)  => s + (d.dados.valor_pago||0), 0);
+  const totEducacao   = educacao.reduce((s,d) => s + (d.dados.valor_pago||0), 0);
+
+  let html = '';
+
+  // ── Ficha 1: Rendimentos Tributáveis de PJ ──
+  html += `<div class="ficha-card">
+    <div class="ficha-header">
+      <span class="ficha-num">Ficha 1</span>
+      <h4>Rendimentos Tributáveis Recebidos de Pessoa Jurídica</h4>
+      <span class="ficha-total">${fmt(totRendTrib)}</span>
+    </div>`;
+  if (informes.length) {
+    html += `<table class="ficha-table">
+      <tr><th>Fonte Pagadora</th><th>CNPJ</th><th>Rend. Tributáveis</th><th>IRRF Retido</th><th>Prev. Oficial</th><th>Prev. Privada</th></tr>`;
+    informes.forEach(d => {
+      const j = d.dados;
+      html += `<tr>
+        <td>${j.fonte_pagadora?.nome||'—'}</td>
+        <td>${j.fonte_pagadora?.cnpj||'—'}</td>
+        <td>${fmt(j.rendimentos_tributaveis)}</td>
+        <td>${fmt(j.irrf_retido)}</td>
+        <td>${fmt(j.previdencia_oficial)}</td>
+        <td>${fmt(j.previdencia_privada)}</td>
+      </tr>`;
+    });
+    html += `<tr class="ficha-total-row">
+      <td colspan="2"><strong>TOTAL</strong></td>
+      <td><strong>${fmt(totRendTrib)}</strong></td>
+      <td><strong>${fmt(totIRRF)}</strong></td>
+      <td><strong>${fmt(totPrevOfic)}</strong></td>
+      <td><strong>${fmt(totPrevPriv)}</strong></td>
+    </tr></table>`;
+  } else {
+    html += `<div class="ficha-empty">Nenhum informe de rendimentos carregado</div>`;
+  }
+  if (totIsentos > 0) {
+    html += `<div style="padding:8px 14px;font-size:12px;background:#fffbeb;border-top:1px solid var(--borda)">
+      ⚡ Rendimentos Isentos/Não Tributáveis: <strong>${fmt(totIsentos)}</strong> — lançar na Ficha de Rendimentos Isentos
+    </div>`;
+  }
+  html += `</div>`;
+
+  // ── Ficha 2: Pagamentos Médicos ──
+  html += `<div class="ficha-card">
+    <div class="ficha-header">
+      <span class="ficha-num">Ficha 2</span>
+      <h4>Pagamentos Efetuados — Despesas Médicas</h4>
+      <span class="ficha-total">${fmt(totMedicos)}</span>
+    </div>`;
+  if (medicos.length) {
+    // Agrupar por prestador
+    const porPrestador = {};
+    medicos.forEach(d => {
+      const j = d.dados;
+      const chave = j.prestador?.cpf_cnpj || j.prestador?.nome || 'Desconhecido';
+      if (!porPrestador[chave]) porPrestador[chave] = { nome: j.prestador?.nome||'—', cpf_cnpj: chave, crm: j.prestador?.crm_cro||'', especialidade: j.prestador?.especialidade||'', total: 0, count: 0 };
+      porPrestador[chave].total += (j.valor_pago||0);
+      porPrestador[chave].count++;
+    });
+    html += `<table class="ficha-table">
+      <tr><th>Prestador</th><th>CPF/CNPJ</th><th>CRM/CRO</th><th>Especialidade</th><th>Qtd. Recibos</th><th>Total Pago</th></tr>`;
+    Object.values(porPrestador).forEach(p => {
+      html += `<tr>
+        <td>${p.nome}</td><td>${p.cpf_cnpj}</td><td>${p.crm||'—'}</td>
+        <td>${p.especialidade||'—'}</td><td style="text-align:center">${p.count}</td>
+        <td>${fmt(p.total)}</td>
+      </tr>`;
+    });
+    html += `<tr class="ficha-total-row">
+      <td colspan="5"><strong>TOTAL DEDUTÍVEL</strong></td>
+      <td><strong>${fmt(totMedicos)}</strong></td>
+    </tr></table>`;
+  } else {
+    html += `<div class="ficha-empty">Nenhum recibo médico carregado</div>`;
+  }
+  html += `</div>`;
+
+  // ── Ficha 3: Instrução (Educação) ──
+  html += `<div class="ficha-card">
+    <div class="ficha-header">
+      <span class="ficha-num">Ficha 3</span>
+      <h4>Pagamentos Efetuados — Instrução</h4>
+      <span class="ficha-total">${fmt(totEducacao)}</span>
+    </div>`;
+  if (educacao.length) {
+    html += `<table class="ficha-table">
+      <tr><th>Instituição</th><th>CNPJ</th><th>Aluno</th><th>Parentesco</th><th>Nível</th><th>Total Pago</th></tr>`;
+    educacao.forEach(d => {
+      const j = d.dados;
+      html += `<tr>
+        <td>${j.instituicao?.nome||'—'}</td><td>${j.instituicao?.cnpj||'—'}</td>
+        <td>${j.aluno?.nome||'—'}</td><td>${j.aluno?.parentesco||'—'}</td>
+        <td>${j.nivel_ensino||'—'}</td><td>${fmt(j.valor_pago)}</td>
+      </tr>`;
+    });
+    html += `<tr class="ficha-total-row">
+      <td colspan="5"><strong>TOTAL DEDUTÍVEL</strong></td>
+      <td><strong>${fmt(totEducacao)}</strong></td>
+    </tr></table>
+    <div style="padding:8px 14px;font-size:11px;color:var(--amarelo);background:var(--amarelo-bg);border-top:1px solid var(--borda)">
+      ⚠️ Limite de dedução com educação: R$ 3.561,50 por pessoa (ano-calendário 2024/2025)
+    </div>`;
+  } else {
+    html += `<div class="ficha-empty">Nenhum recibo de educação carregado</div>`;
+  }
+  html += `</div>`;
+
+  // ── Ficha 4: Renda Variável ──
+  html += `<div class="ficha-card">
+    <div class="ficha-header">
+      <span class="ficha-num">Ficha 4</span>
+      <h4>Renda Variável — Operações em Bolsa</h4>
+      <span class="ficha-total">${notas.length} nota(s)</span>
+    </div>`;
+  if (notas.length) {
+    html += `<table class="ficha-table">
+      <tr><th>Corretora</th><th>Data</th><th>Operações</th><th>Total Taxas</th><th>Valor Líquido</th></tr>`;
+    notas.forEach(d => {
+      const j = d.dados;
+      html += `<tr>
+        <td>${j.corretora?.nome||'—'}</td>
+        <td>${j.data_pregao||'—'}</td>
+        <td style="text-align:center">${(j.operacoes||[]).length}</td>
+        <td>${fmt(j.taxas?.total||j.taxas?.total_taxas)}</td>
+        <td>${fmt(j.valor_liquido)}</td>
+      </tr>`;
+    });
+    html += `</table>`;
+  } else {
+    html += `<div class="ficha-empty">Nenhuma nota de corretagem carregada</div>`;
+  }
+  html += `</div>`;
+
+  // ── Checklist de documentos ──
+  html += `<div class="ficha-card">
+    <div class="ficha-header">
+      <span class="ficha-num" style="background:var(--verde)">✓</span>
+      <h4>Checklist de Documentos</h4>
+    </div>
+    <div style="padding:12px 14px">
+    <ul class="chk-list">`;
+
+  const chks = [
+    { ok: informes.length > 0, titulo: 'Informes de Rendimentos', desc: informes.length > 0 ? `${informes.length} informe(s) carregado(s) — ${informes.map(d=>d.dados.fonte_pagadora?.nome||'?').join(', ')}` : 'Faltam informes de empregadores, bancos, corretoras e previdência' },
+    { ok: informes.some(d => (d.dados.irrf_retido||0) > 0), titulo: 'IRRF Retido na Fonte', desc: informes.some(d => (d.dados.irrf_retido||0) > 0) ? `Total retido: ${fmt(totIRRF)}` : 'Nenhum IRRF retido identificado nos informes' },
+    { ok: informes.some(d => (d.dados.previdencia_oficial||0) > 0), titulo: 'Previdência Oficial (INSS)', desc: informes.some(d => (d.dados.previdencia_oficial||0) > 0) ? `Total: ${fmt(totPrevOfic)}` : 'Nenhuma contribuição ao INSS identificada' },
+    { ok: medicos.length > 0, titulo: 'Recibos Médicos / Plano de Saúde', desc: medicos.length > 0 ? `${medicos.length} recibo(s) — Total: ${fmt(totMedicos)}` : 'Nenhum recibo médico carregado' },
+    { ok: educacao.length > 0, titulo: 'Recibos de Educação', desc: educacao.length > 0 ? `${educacao.length} recibo(s) — Total: ${fmt(totEducacao)}` : 'Nenhum comprovante de educação carregado' },
+    { ok: notas.length > 0, titulo: 'Notas de Corretagem (Renda Variável)', desc: notas.length > 0 ? `${notas.length} nota(s) carregada(s)` : 'Nenhuma nota de corretagem — se operar em bolsa, inclua todas do ano' },
+    { ok: informes.some(d => (d.dados.previdencia_privada||0) > 0), titulo: 'Previdência Privada (PGBL)', titulo2: 'Dedutível até 12% da renda bruta', desc: informes.some(d => (d.dados.previdencia_privada||0) > 0) ? `Total: ${fmt(totPrevPriv)}` : 'Nenhuma contribuição a PGBL identificada' },
+  ];
+
+  chks.forEach(c => {
+    const ic = c.ok ? '✅' : '⚠️';
+    html += `<li class="chk-item">
+      <span class="chk-ic">${ic}</span>
+      <div class="chk-txt">
+        <strong>${c.titulo}${c.titulo2 ? ` <span style="font-weight:400;color:var(--texto2)">— ${c.titulo2}</span>` : ''}</strong>
+        <span>${c.desc}</span>
+      </div>
+    </li>`;
+  });
+
+  html += `</ul></div></div>`;
+
+  // ── Resumo final de deduções ──
+  const totalDedutivel = totMedicos + Math.min(totEducacao, 3561.50 * (educacao.length > 0 ? 1 : 0)) + totPrevOfic + totPrevPriv;
+  html += `<div style="background:var(--azul);color:#fff;border-radius:8px;padding:16px;margin-top:4px">
+    <div style="font-size:13px;font-weight:600;margin-bottom:10px">💡 Resumo para o PGD</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">
+      <div>Rendimentos Tributáveis: <strong>${fmt(totRendTrib)}</strong></div>
+      <div>IRRF Retido: <strong>${fmt(totIRRF)}</strong></div>
+      <div>Deduções Médicas: <strong>${fmt(totMedicos)}</strong></div>
+      <div>Deduções Educação: <strong>${fmt(Math.min(totEducacao, 3561.50))}</strong></div>
+      <div>Prev. Oficial: <strong>${fmt(totPrevOfic)}</strong></div>
+      <div>Prev. Privada (PGBL): <strong>${fmt(totPrevPriv)}</strong></div>
+    </div>
+  </div>`;
+
+  return html;
+}
 
 // ════════════════════════════════════════════════════
 // INIT
