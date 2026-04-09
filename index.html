@@ -373,7 +373,10 @@ function renderMain() {
 
     <!-- Upload -->
     <div class="card">
-      <div class="card-header"><h3>📁 Documentos</h3></div>
+      <div class="card-header">
+        <h3>📁 Documentos</h3>
+        <button class="btn btn-vermelho" style="font-size:11px" onclick="limparErros()">✕ Limpar erros</button>
+      </div>
       <div class="drop-zone" id="drop-zone"
            ondragover="dzOver(event)" ondragleave="dzLeave()" ondrop="dzDrop(event)"
            onclick="document.getElementById('file-in').click()">
@@ -464,20 +467,20 @@ function dzDrop(e) { e.preventDefault(); dzLeave(); processarArquivos(e.dataTran
 async function processarArquivos(files) {
   if (!getApiKey()) { toast('Configure a API Key primeiro', 'err'); abrirConfig(); return; }
   const lista = document.getElementById('doc-list');
+  const fila = [];
 
   for (const file of files) {
     const ext = file.name.split('.').pop().toLowerCase();
     if (!['pdf','png','jpg','jpeg'].includes(ext)) continue;
 
-    // Cria doc no estado
     const doc = {
       id: Date.now().toString() + Math.random().toString(36).slice(2),
       clienteId: clienteAtivo.id,
       nome: file.name,
       tipo: null,
-      status: 'processando',
-      progresso: 10,
-      progLabel: 'Lendo documento…',
+      status: 'aguardando',
+      progresso: 0,
+      progLabel: 'Na fila…',
       dados: null,
       revisado: false,
       obs: '',
@@ -487,15 +490,24 @@ async function processarArquivos(files) {
     DB.docs.push(doc);
     salvarDB();
 
-    // Adiciona linha na UI
     const row = document.createElement('div');
     row.id = `doc-${doc.id}`;
     row.className = 'doc-row';
     lista.appendChild(row);
     atualizarDocRow(doc);
 
-    // Processa em background
-    processarComClaude(doc, file);
+    fila.push({ doc, file });
+  }
+
+  // Processa um por vez com intervalo de 3s para evitar rate limit
+  for (let i = 0; i < fila.length; i++) {
+    const { doc, file } = fila[i];
+    doc.status = 'processando';
+    doc.progresso = 10;
+    doc.progLabel = `Processando (${i+1}/${fila.length})…`;
+    atualizarDocRow(doc);
+    await processarComClaude(doc, file);
+    if (i < fila.length - 1) await new Promise(r => setTimeout(r, 3000));
   }
 }
 
@@ -667,6 +679,19 @@ function salvarDados() {
 // ════════════════════════════════════════════════════
 // REMOVER DOC
 // ════════════════════════════════════════════════════
+function limparErros() {
+  const erros = DB.docs.filter(d => d.clienteId === clienteAtivo.id && d.status === 'erro');
+  if (!erros.length) { toast('Nenhum erro para limpar', 'info'); return; }
+  erros.forEach(d => {
+    DB.docs = DB.docs.filter(x => x.id !== d.id);
+    const el = document.getElementById(`doc-${d.id}`);
+    if (el) el.remove();
+  });
+  salvarDB();
+  renderSidebar();
+  toast(`${erros.length} documento(s) com erro removidos`, 'ok');
+}
+
 function removerDoc(docId) {
   if (!confirm('Remover este documento?')) return;
   DB.docs = DB.docs.filter(d => d.id !== docId);
