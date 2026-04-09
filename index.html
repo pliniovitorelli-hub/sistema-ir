@@ -413,7 +413,10 @@ function renderMain() {
     <div class="card">
       <div class="card-header">
         <h3>📁 Documentos</h3>
-        <button class="btn btn-vermelho" style="font-size:11px" onclick="limparErros()">✕ Limpar erros</button>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-verde" style="font-size:11px" onclick="marcarTodosRevisados()">✓ Marcar todos revisados</button>
+          <button class="btn btn-vermelho" style="font-size:11px" onclick="limparErros()">✕ Limpar erros</button>
+        </div>
       </div>
       <div class="drop-zone" id="drop-zone"
            ondragover="dzOver(event)" ondragleave="dzLeave()" ondrop="dzDrop(event)"
@@ -717,6 +720,19 @@ function salvarDados() {
 // ════════════════════════════════════════════════════
 // REMOVER DOC
 // ════════════════════════════════════════════════════
+function marcarTodosRevisados() {
+  const pendentes = DB.docs.filter(d => d.clienteId === clienteAtivo.id && d.dados && d.status === 'ok');
+  if (!pendentes.length) { toast('Nenhum documento pendente de revisão', 'info'); return; }
+  pendentes.forEach(d => {
+    d.revisado = true;
+    d.status = 'revisado';
+    atualizarDocRow(d);
+  });
+  salvarDB();
+  renderSidebar();
+  toast(`${pendentes.length} documento(s) marcados como revisados ✓`, 'ok');
+}
+
 function limparErros() {
   const erros = DB.docs.filter(d => d.clienteId === clienteAtivo.id && d.status === 'erro');
   if (!erros.length) { toast('Nenhum erro para limpar', 'info'); return; }
