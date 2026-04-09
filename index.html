@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sistema IR — Contador</title>
+
+<!-- SheetJS para gerar Excel -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- PDF.js para ler PDFs -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
+<style>
+:root {
+  --azul: #1F4E79; --azul2: #2E75B6; --azul-bg: #EBF3FB;
+  --verde: #1A7A4A; --verde-bg: #E6F4ED;
+  --amarelo: #9A6000; --amarelo-bg: #FFF8E6;
+  --vermelho: #C62828; --vermelho-bg: #FDE8E8;
+  --roxo: #6D28D9; --roxo-bg: #EDE9FE;
+  --cinza: #F5F7FA; --borda: #DDE3EC;
+  --texto: #1A1A2E; --texto2: #5A6478;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--cinza);color:var(--texto);height:100vh;display:flex;flex-direction:column}
+
+/* ── Header ── */
+header{background:var(--azul);color:#fff;padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.25)}
+header h1{font-size:16px;font-weight:600;letter-spacing:.3px}
+.header-right{display:flex;align-items:center;gap:12px}
+.api-pill{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);border-radius:20px;padding:4px 12px;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:6px}
+.dot{width:8px;height:8px;border-radius:50%;background:#6EE7B7}
+.dot.off{background:#FCA5A5}
+
+/* ── Layout ── */
+.layout{display:flex;flex:1;overflow:hidden}
+.sidebar{width:300px;background:#fff;border-right:1px solid var(--borda);display:flex;flex-direction:column;overflow:hidden}
+.main{flex:1;overflow-y:auto;padding:24px}
+
+/* ── Sidebar ── */
+.sb-top{padding:14px;border-bottom:1px solid var(--borda)}
+.sb-top h2{font-size:12px;font-weight:700;color:var(--texto2);text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px}
+.sb-list{flex:1;overflow-y:auto}
+.sb-item{padding:12px 14px;border-bottom:1px solid var(--borda);cursor:pointer;transition:background .1s}
+.sb-item:hover{background:var(--azul-bg)}
+.sb-item.ativo{background:var(--azul-bg);border-left:3px solid var(--azul)}
+.sb-item .nome{font-size:13px;font-weight:600}
+.sb-item .meta{font-size:11px;color:var(--texto2);margin-top:3px;display:flex;gap:6px;align-items:center}
+.badge{padding:2px 7px;border-radius:10px;font-size:10px;font-weight:600}
+.b-azul{background:var(--azul-bg);color:var(--azul)}
+.b-verde{background:var(--verde-bg);color:var(--verde)}
+.b-amarelo{background:var(--amarelo-bg);color:var(--amarelo)}
+.b-vermelho{background:var(--vermelho-bg);color:var(--vermelho)}
+.b-roxo{background:var(--roxo-bg);color:var(--roxo)}
+.b-cinza{background:var(--borda);color:var(--texto2)}
+
+/* ── Botões ── */
+.btn{display:inline-flex;align-items:center;gap:5px;padding:7px 13px;border-radius:6px;border:none;cursor:pointer;font-size:12px;font-weight:500;transition:all .15s;white-space:nowrap}
+.btn-primary{background:var(--azul);color:#fff}.btn-primary:hover{background:var(--azul2)}
+.btn-ghost{background:var(--cinza);color:var(--texto);border:1px solid var(--borda)}.btn-ghost:hover{background:var(--borda)}
+.btn-verde{background:var(--verde-bg);color:var(--verde);border:1px solid #a7f3d0}
+.btn-amarelo{background:var(--amarelo-bg);color:var(--amarelo);border:1px solid #fcd34d}
+.btn-vermelho{background:var(--vermelho-bg);color:var(--vermelho);border:1px solid #fca5a5}
+.btn-full{width:100%;justify-content:center}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+
+/* ── Card ── */
+.card{background:#fff;border:1px solid var(--borda);border-radius:10px;padding:18px;margin-bottom:16px}
+.card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.card-header h3{font-size:14px;font-weight:600}
+.card-actions{display:flex;gap:6px;flex-wrap:wrap}
+
+/* ── Stats ── */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+.stat{background:#fff;border:1px solid var(--borda);border-radius:10px;padding:14px;text-align:center}
+.stat .n{font-size:26px;font-weight:700}
+.stat .l{font-size:11px;color:var(--texto2);margin-top:2px}
+
+/* ── Upload zone ── */
+.drop-zone{border:2px dashed var(--borda);border-radius:8px;padding:28px 16px;text-align:center;cursor:pointer;transition:all .2s}
+.drop-zone:hover,.drop-zone.over{border-color:var(--azul2);background:var(--azul-bg)}
+.drop-zone input{display:none}
+.drop-zone .di{font-size:36px;margin-bottom:8px}
+.drop-zone p{font-size:12px;color:var(--texto2)}
+
+/* ── Doc list ── */
+.doc-list{display:flex;flex-direction:column;gap:6px;margin-top:14px}
+.doc-row{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--borda);border-radius:7px}
+.doc-row:hover{border-color:var(--azul2)}
+.doc-ic{font-size:20px;flex-shrink:0;width:28px;text-align:center}
+.doc-inf{flex:1;min-width:0}
+.doc-nome{font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.doc-sub{font-size:10px;color:var(--texto2);margin-top:1px}
+.doc-acts{display:flex;gap:5px;flex-shrink:0}
+
+/* ── Status ── */
+.st{padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;white-space:nowrap}
+.st-aguardando{background:var(--borda);color:var(--texto2)}
+.st-processando{background:var(--roxo-bg);color:var(--roxo)}
+.st-ok{background:var(--amarelo-bg);color:var(--amarelo)}
+.st-revisado{background:var(--verde-bg);color:var(--verde)}
+.st-erro{background:var(--vermelho-bg);color:var(--vermelho)}
+
+/* ── Modal ── */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:100;padding:16px}
+.modal{background:#fff;border-radius:12px;padding:22px;width:100%;max-width:540px;box-shadow:0 20px 60px rgba(0,0,0,.3);max-height:90vh;overflow-y:auto}
+.modal h3{font-size:15px;font-weight:600;margin-bottom:14px}
+.fg{margin-bottom:12px}
+.fg label{display:block;font-size:12px;font-weight:500;color:var(--texto2);margin-bottom:4px}
+.fg input,.fg select,.fg textarea{width:100%;padding:8px 11px;border:1px solid var(--borda);border-radius:6px;font-size:13px;font-family:inherit;outline:none;transition:border-color .15s}
+.fg input:focus,.fg select:focus,.fg textarea:focus{border-color:var(--azul2)}
+.fg textarea{min-height:260px;font-family:'Consolas',monospace;font-size:11px;resize:vertical}
+.fg-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.modal-acts{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+
+/* ── Config overlay ── */
+.cfg-box{background:#fff;border-radius:12px;padding:24px;width:100%;max-width:480px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.cfg-box h3{font-size:16px;font-weight:600;margin-bottom:6px}
+.cfg-box p{font-size:12px;color:var(--texto2);margin-bottom:16px;line-height:1.6}
+.cfg-box .link{color:var(--azul2);text-decoration:none}
+
+/* ── Empty ── */
+.empty{text-align:center;padding:60px 24px;color:var(--texto2)}
+.empty .ei{font-size:48px;margin-bottom:12px}
+.empty p{font-size:13px}
+
+/* ── Progress bar ── */
+.pbar-wrap{margin-top:8px}
+.pbar{height:4px;background:var(--borda);border-radius:2px;overflow:hidden}
+.pbar-fill{height:100%;background:var(--azul2);border-radius:2px;transition:width .3s}
+.pbar-label{font-size:10px;color:var(--texto2);margin-top:3px}
+
+/* ── Toast ── */
+#toast{position:fixed;bottom:20px;right:20px;z-index:999;display:flex;flex-direction:column;gap:6px}
+.t{padding:10px 14px;border-radius:8px;font-size:12px;font-weight:500;box-shadow:0 4px 12px rgba(0,0,0,.2);animation:si .2s ease}
+@keyframes si{from{transform:translateX(110%);opacity:0}to{transform:translateX(0);opacity:1}}
+.t-ok{background:var(--verde);color:#fff}
+.t-err{background:var(--vermelho);color:#fff}
+.t-info{background:var(--azul);color:#fff}
+
+.sep{height:1px;background:var(--borda);margin:8px 0}
+.hidden{display:none!important}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin{display:inline-block;width:12px;height:12px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;animation:spin .6s linear infinite}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════ HEADER ═══════════════════ -->
+<header>
+  <h1>📊 Sistema IR — Painel do Contador</h1>
+  <div class="header-right">
+    <div class="api-pill" onclick="abrirConfig()" id="api-status">
+      <span class="dot off" id="api-dot"></span>
+      <span id="api-label">Configurar API Key</span>
+    </div>
+  </div>
+</header>
+
+<!-- ═══════════════════ LAYOUT ═══════════════════ -->
+<div class="layout">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sb-top">
+      <h2>Clientes</h2>
+      <button class="btn btn-primary btn-full" onclick="abrirModalCliente()">+ Novo Cliente</button>
+    </div>
+    <div class="sb-list" id="sb-list">
+      <div class="empty" style="padding:32px 16px"><div class="ei" style="font-size:32px">👤</div><p>Nenhum cliente</p></div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main" id="main">
+    <div class="empty">
+      <div class="ei">📂</div>
+      <p>Selecione ou cadastre um cliente</p>
+    </div>
+  </main>
+</div>
+
+<!-- ═══════════════════ TOAST ═══════════════════ -->
+<div id="toast"></div>
+
+<!-- ═══════════════════ MODAL: CONFIG API ═══════════════════ -->
+<div class="overlay hidden" id="ov-cfg">
+  <div class="cfg-box">
+    <h3>🔑 Configurar API Key da Anthropic</h3>
+    <p>A chave é armazenada apenas neste navegador (localStorage) e nunca sai do seu computador.<br>
+    Obtenha sua chave em <a class="link" href="https://console.anthropic.com/" target="_blank">console.anthropic.com</a></p>
+    <div class="fg">
+      <label>Anthropic API Key</label>
+      <input type="password" id="cfg-key" placeholder="sk-ant-api03-...">
+    </div>
+    <div class="modal-acts">
+      <button class="btn btn-ghost" onclick="fechar('ov-cfg')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarApiKey()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ MODAL: NOVO CLIENTE ═══════════════════ -->
+<div class="overlay hidden" id="ov-cliente">
+  <div class="modal">
+    <h3>Cadastrar Cliente</h3>
+    <div class="fg"><label>Nome completo *</label><input id="c-nome" placeholder="João da Silva"></div>
+    <div class="fg-row">
+      <div class="fg"><label>CPF *</label><input id="c-cpf" placeholder="000.000.000-00" maxlength="14" oninput="maskCPF(this)"></div>
+      <div class="fg"><label>Ano-Calendário *</label>
+        <select id="c-ano"><option value="2025">2025</option><option value="2024">2024</option><option value="2023">2023</option><option value="2022">2022</option></select>
+      </div>
+    </div>
+    <div class="fg-row">
+      <div class="fg"><label>E-mail</label><input id="c-email" type="email" placeholder="joao@email.com"></div>
+      <div class="fg"><label>Telefone</label><input id="c-tel" placeholder="(11) 9 0000-0000"></div>
+    </div>
+    <div class="modal-acts">
+      <button class="btn btn-ghost" onclick="fechar('ov-cliente')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarCliente()">Cadastrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ MODAL: EDITAR DADOS ═══════════════════ -->
+<div class="overlay hidden" id="ov-dados">
+  <div class="modal" style="max-width:680px">
+    <h3 id="ov-dados-titulo">Revisar Dados</h3>
+    <p style="font-size:11px;color:var(--texto2);margin-bottom:10px">Edite o JSON para corrigir dados extraídos incorretamente.</p>
+    <div class="fg"><textarea id="json-ed"></textarea></div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+      <input type="checkbox" id="rev-check" style="width:auto">
+      <label for="rev-check" style="font-size:12px;font-weight:500">Marcar como revisado ✓</label>
+    </div>
+    <div class="fg"><label>Observações</label><input id="obs-ed" placeholder="Notas adicionais..."></div>
+    <div class="modal-acts">
+      <button class="btn btn-ghost" onclick="fechar('ov-dados')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarDados()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════
+// ESTADO GLOBAL
+// ════════════════════════════════════════════════════
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+let DB = JSON.parse(localStorage.getItem('ir_db') || '{"clientes":[],"docs":[]}');
+let clienteAtivo = null;
+let docEditando = null;
+
+function salvarDB() { localStorage.setItem('ir_db', JSON.stringify(DB)); }
+
+// ── API Key ─────────────────────────────────────────
+function getApiKey() { return localStorage.getItem('anthropic_key') || ''; }
+function salvarApiKey() {
+  const k = document.getElementById('cfg-key').value.trim();
+  if (!k) { toast('Informe a chave', 'err'); return; }
+  localStorage.setItem('anthropic_key', k);
+  fechar('ov-cfg');
+  atualizarStatusApi();
+  toast('API Key salva!', 'ok');
+}
+function atualizarStatusApi() {
+  const k = getApiKey();
+  document.getElementById('api-dot').className = k ? 'dot' : 'dot off';
+  document.getElementById('api-label').textContent = k ? 'API Key configurada' : 'Configurar API Key';
+}
+function abrirConfig() {
+  document.getElementById('cfg-key').value = getApiKey();
+  abrir('ov-cfg');
+}
+
+// ════════════════════════════════════════════════════
+// CLIENTES
+// ════════════════════════════════════════════════════
+function abrirModalCliente() {
+  ['c-nome','c-cpf','c-email','c-tel'].forEach(id => document.getElementById(id).value = '');
+  abrir('ov-cliente');
+}
+
+function salvarCliente() {
+  const nome = document.getElementById('c-nome').value.trim();
+  const cpf = document.getElementById('c-cpf').value.replace(/\D/g,'');
+  if (!nome || cpf.length < 11) { toast('Nome e CPF obrigatórios', 'err'); return; }
+  if (DB.clientes.find(c => c.cpf === cpf)) { toast('CPF já cadastrado', 'err'); return; }
+  const cliente = {
+    id: Date.now().toString(),
+    nome, cpf,
+    email: document.getElementById('c-email').value,
+    tel: document.getElementById('c-tel').value,
+    ano: parseInt(document.getElementById('c-ano').value),
+    criadoEm: new Date().toISOString()
+  };
+  DB.clientes.push(cliente);
+  salvarDB();
+  fechar('ov-cliente');
+  renderSidebar();
+  selecionarCliente(cliente.id);
+  toast('Cliente cadastrado!', 'ok');
+}
+
+function removerCliente(id) {
+  if (!confirm('Remover cliente e todos os documentos?')) return;
+  DB.clientes = DB.clientes.filter(c => c.id !== id);
+  DB.docs = DB.docs.filter(d => d.clienteId !== id);
+  salvarDB();
+  clienteAtivo = null;
+  renderSidebar();
+  document.getElementById('main').innerHTML = '<div class="empty"><div class="ei">📂</div><p>Selecione um cliente</p></div>';
+  toast('Cliente removido', 'ok');
+}
+
+function selecionarCliente(id) {
+  clienteAtivo = DB.clientes.find(c => c.id === id);
+  renderSidebar();
+  renderMain();
+}
+
+function renderSidebar() {
+  const el = document.getElementById('sb-list');
+  if (!DB.clientes.length) {
+    el.innerHTML = '<div class="empty" style="padding:32px 16px"><div class="ei" style="font-size:32px">👤</div><p>Nenhum cliente</p></div>';
+    return;
+  }
+  el.innerHTML = DB.clientes.map(c => {
+    const docs = DB.docs.filter(d => d.clienteId === c.id);
+    const pend = docs.filter(d => d.status === 'ok').length;
+    return `<div class="sb-item ${clienteAtivo?.id === c.id ? 'ativo' : ''}" onclick="selecionarCliente('${c.id}')">
+      <div class="nome">${c.nome}</div>
+      <div class="meta">
+        <span>${formatCPF(c.cpf)}</span> · <span>${c.ano}</span>
+        ${pend ? `<span class="badge b-amarelo">${pend} para revisar</span>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ════════════════════════════════════════════════════
+// MAIN: RENDER DO CLIENTE
+// ════════════════════════════════════════════════════
+function renderMain() {
+  if (!clienteAtivo) return;
+  const docs = DB.docs.filter(d => d.clienteId === clienteAtivo.id);
+  const cnt = {
+    total: docs.length,
+    proc: docs.filter(d => d.status === 'processando').length,
+    rev: docs.filter(d => d.status === 'ok').length,
+    ok: docs.filter(d => d.status === 'revisado').length,
+    err: docs.filter(d => d.status === 'erro').length,
+  };
+
+  document.getElementById('main').innerHTML = `
+    <!-- Stats -->
+    <div class="stats">
+      <div class="stat"><div class="n" style="color:var(--azul)">${cnt.total}</div><div class="l">Total</div></div>
+      <div class="stat"><div class="n" style="color:var(--roxo)">${cnt.proc}</div><div class="l">Processando</div></div>
+      <div class="stat"><div class="n" style="color:var(--amarelo)">${cnt.rev}</div><div class="l">Para Revisar</div></div>
+      <div class="stat"><div class="n" style="color:var(--verde)">${cnt.ok}</div><div class="l">Revisados</div></div>
+    </div>
+
+    <!-- Ações -->
+    <div class="card">
+      <div class="card-header">
+        <h3>👤 ${clienteAtivo.nome} · ${clienteAtivo.ano}</h3>
+        <div class="card-actions">
+          <button class="btn btn-verde" onclick="exportarExcel()">⬇ Excel</button>
+          <button class="btn btn-vermelho btn-ghost" onclick="removerCliente('${clienteAtivo.id}')">Remover</button>
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--texto2)">CPF: ${formatCPF(clienteAtivo.cpf)}${clienteAtivo.email ? ' · ' + clienteAtivo.email : ''}</div>
+    </div>
+
+    <!-- Upload -->
+    <div class="card">
+      <div class="card-header"><h3>📁 Documentos</h3></div>
+      <div class="drop-zone" id="drop-zone"
+           ondragover="dzOver(event)" ondragleave="dzLeave()" ondrop="dzDrop(event)"
+           onclick="document.getElementById('file-in').click()">
+        <input type="file" id="file-in" multiple accept=".pdf,.png,.jpg,.jpeg" onchange="processarArquivos(this.files)">
+        <div class="di">📎</div>
+        <p style="font-weight:500;margin-bottom:4px">Arraste documentos aqui ou clique para selecionar</p>
+        <p>PDF, PNG, JPG — O Claude irá classificar e extrair os dados automaticamente</p>
+      </div>
+
+      <div id="doc-list" class="doc-list">
+        ${renderDocList(docs)}
+      </div>
+    </div>
+  `;
+}
+
+const TIPO_LABEL = {
+  informe_rendimentos: 'Informe de Rendimentos',
+  nota_corretagem: 'Nota de Corretagem',
+  recibo_medico: 'Recibo Médico',
+  recibo_educacao: 'Recibo de Educação',
+  outro: 'Outro',
+};
+const TIPO_IC = {
+  informe_rendimentos: '💼', nota_corretagem: '📈',
+  recibo_medico: '🏥', recibo_educacao: '🎓', outro: '📄',
+};
+const ST_CLASS = {
+  aguardando: 'st-aguardando', processando: 'st-processando',
+  ok: 'st-ok', revisado: 'st-revisado', erro: 'st-erro',
+};
+const ST_LABEL = {
+  aguardando: 'Aguardando', processando: 'Processando…',
+  ok: 'Para Revisar', revisado: '✓ Revisado', erro: 'Erro',
+};
+
+function renderDocList(docs) {
+  if (!docs.length) return '<p style="text-align:center;font-size:12px;color:var(--texto2);padding:20px">Nenhum documento enviado</p>';
+  return docs.map(d => `
+    <div class="doc-row" id="doc-${d.id}">
+      <div class="doc-ic">${TIPO_IC[d.tipo] || '📄'}</div>
+      <div class="doc-inf">
+        <div class="doc-nome" title="${d.nome}">${d.nome}</div>
+        <div class="doc-sub">${TIPO_LABEL[d.tipo] || 'Classificando…'} · ${formatDate(d.addedAt)}</div>
+        ${d.status === 'processando' ? `<div class="pbar-wrap"><div class="pbar"><div class="pbar-fill" style="width:${d.progresso||20}%"></div></div><div class="pbar-label">${d.progLabel||'Lendo documento…'}</div></div>` : ''}
+        ${d.erroMsg ? `<div style="font-size:10px;color:var(--vermelho);margin-top:2px">${d.erroMsg}</div>` : ''}
+      </div>
+      <span class="st ${ST_CLASS[d.status]}">${ST_LABEL[d.status]}</span>
+      <div class="doc-acts">
+        ${d.dados ? `<button class="btn btn-ghost" style="font-size:11px" onclick="abrirDados('${d.id}')">✏ Revisar</button>` : ''}
+        ${d.status === 'erro' ? `<button class="btn btn-ghost" style="font-size:11px" onclick="reprocessar('${d.id}')">🔄</button>` : ''}
+        <button class="btn btn-vermelho" style="font-size:11px;padding:4px 8px" onclick="removerDoc('${d.id}')">✕</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function atualizarDocRow(doc) {
+  const el = document.getElementById(`doc-${doc.id}`);
+  if (!el) return;
+  const ic = TIPO_IC[doc.tipo] || '📄';
+  const tipoLabel = TIPO_LABEL[doc.tipo] || 'Classificando…';
+  el.innerHTML = `
+    <div class="doc-ic">${ic}</div>
+    <div class="doc-inf">
+      <div class="doc-nome" title="${doc.nome}">${doc.nome}</div>
+      <div class="doc-sub">${tipoLabel} · ${formatDate(doc.addedAt)}</div>
+      ${doc.status === 'processando' ? `<div class="pbar-wrap"><div class="pbar"><div class="pbar-fill" style="width:${doc.progresso||20}%"></div></div><div class="pbar-label">${doc.progLabel||'Lendo…'}</div></div>` : ''}
+      ${doc.erroMsg ? `<div style="font-size:10px;color:var(--vermelho);margin-top:2px">${doc.erroMsg}</div>` : ''}
+    </div>
+    <span class="st ${ST_CLASS[doc.status]}">${ST_LABEL[doc.status]}</span>
+    <div class="doc-acts">
+      ${doc.dados ? `<button class="btn btn-ghost" style="font-size:11px" onclick="abrirDados('${doc.id}')">✏ Revisar</button>` : ''}
+      ${doc.status === 'erro' ? `<button class="btn btn-ghost" style="font-size:11px" onclick="reprocessar('${doc.id}')">🔄</button>` : ''}
+      <button class="btn btn-vermelho" style="font-size:11px;padding:4px 8px" onclick="removerDoc('${doc.id}')">✕</button>
+    </div>
+  `;
+  renderSidebar();
+}
+
+// ════════════════════════════════════════════════════
+// UPLOAD + PROCESSAMENTO
+// ════════════════════════════════════════════════════
+function dzOver(e) { e.preventDefault(); document.getElementById('drop-zone').classList.add('over'); }
+function dzLeave() { document.getElementById('drop-zone').classList.remove('over'); }
+function dzDrop(e) { e.preventDefault(); dzLeave(); processarArquivos(e.dataTransfer.files); }
+
+async function processarArquivos(files) {
+  if (!getApiKey()) { toast('Configure a API Key primeiro', 'err'); abrirConfig(); return; }
+  const lista = document.getElementById('doc-list');
+
+  for (const file of files) {
+    const ext = file.name.split('.').pop().toLowerCase();
+    if (!['pdf','png','jpg','jpeg'].includes(ext)) continue;
+
+    // Cria doc no estado
+    const doc = {
+      id: Date.now().toString() + Math.random().toString(36).slice(2),
+      clienteId: clienteAtivo.id,
+      nome: file.name,
+      tipo: null,
+      status: 'processando',
+      progresso: 10,
+      progLabel: 'Lendo documento…',
+      dados: null,
+      revisado: false,
+      obs: '',
+      addedAt: new Date().toISOString(),
+      erroMsg: null,
+    };
+    DB.docs.push(doc);
+    salvarDB();
+
+    // Adiciona linha na UI
+    const row = document.createElement('div');
+    row.id = `doc-${doc.id}`;
+    row.className = 'doc-row';
+    lista.appendChild(row);
+    atualizarDocRow(doc);
+
+    // Processa em background
+    processarComClaude(doc, file);
+  }
+}
+
+async function reprocessar(docId) {
+  if (!getApiKey()) { toast('Configure a API Key primeiro', 'err'); return; }
+  const doc = DB.docs.find(d => d.id === docId);
+  if (!doc) return;
+  // Precisamos do arquivo original — não temos mais. Informa ao usuário.
+  toast('Para reprocessar, remova e envie o arquivo novamente.', 'info');
+}
+
+async function processarComClaude(doc, file) {
+  try {
+    // 1. Converter arquivo para base64
+    setProgresso(doc, 20, 'Convertendo arquivo…');
+    let base64, mediaType, texto = '';
+
+    if (file.name.toLowerCase().endsWith('.pdf')) {
+      mediaType = 'application/pdf';
+      // Extrair texto com PDF.js como fallback de contexto
+      try {
+        const ab = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: ab }).promise;
+        const pages = [];
+        for (let i = 1; i <= Math.min(pdf.numPages, 8); i++) {
+          const p = await pdf.getPage(i);
+          const tc = await p.getTextContent();
+          pages.push(tc.items.map(s => s.str).join(' '));
+        }
+        texto = pages.join('\n');
+      } catch {}
+      base64 = await fileToBase64(file);
+    } else {
+      mediaType = file.type || 'image/jpeg';
+      base64 = await fileToBase64(file);
+    }
+
+    setProgresso(doc, 40, 'Classificando documento…');
+
+    // 2. Classificar
+    const tipo = await chamarClaude(buildMsgClassificar(base64, mediaType, texto));
+    doc.tipo = tipo;
+    setProgresso(doc, 60, `Extraindo dados: ${TIPO_LABEL[tipo] || tipo}…`);
+
+    // 3. Extrair dados
+    const dados = await chamarClaude(buildMsgExtrair(base64, mediaType, texto, tipo));
+    doc.dados = dados;
+    doc.status = 'ok';
+    doc.progresso = 100;
+    doc.progLabel = '';
+    salvarDB();
+    atualizarDocRow(doc);
+    toast(`✓ ${doc.nome} processado!`, 'ok');
+
+  } catch (e) {
+    doc.status = 'erro';
+    doc.erroMsg = e.message || 'Erro desconhecido';
+    salvarDB();
+    atualizarDocRow(doc);
+    toast(`Erro em ${doc.nome}: ${doc.erroMsg}`, 'err');
+  }
+}
+
+function setProgresso(doc, pct, label) {
+  doc.progresso = pct;
+  doc.progLabel = label;
+  atualizarDocRow(doc);
+}
+
+// ════════════════════════════════════════════════════
+// CLAUDE API
+// ════════════════════════════════════════════════════
+function buildMsgClassificar(b64, mime, texto) {
+  const content = [];
+  if (mime === 'application/pdf') {
+    content.push({ type: 'document', source: { type: 'base64', media_type: mime, data: b64 } });
+  } else {
+    content.push({ type: 'image', source: { type: 'base64', media_type: mime, data: b64 } });
+  }
+  if (texto) content.push({ type: 'text', text: `Texto extraído do PDF:\n${texto.slice(0, 3000)}` });
+  content.push({ type: 'text', text: `Classifique este documento fiscal brasileiro. Retorne APENAS um JSON: {"tipo":"VALOR"}\nVALOR deve ser um de: informe_rendimentos | nota_corretagem | recibo_medico | recibo_educacao | outro` });
+  return [{ role: 'user', content }];
+}
+
+const PROMPTS_EXTRACAO = {
+  informe_rendimentos: `Extraia os dados e retorne APENAS este JSON preenchido:
+{"fonte_pagadora":{"nome":"","cnpj":""},"titular":{"nome":"","cpf":""},"ano_calendario":null,"rendimentos_tributaveis":null,"irrf_retido":null,"previdencia_oficial":null,"previdencia_privada":null,"rendimentos_isentos":null,"rendimentos_sujeitos_exclusivo":null,"outros_rendimentos":[],"observacoes":""}
+Valores monetários em float sem R$ ou pontos.`,
+
+  nota_corretagem: `Extraia os dados e retorne APENAS este JSON preenchido:
+{"corretora":{"nome":"","cnpj":""},"cliente":{"nome":"","cpf_cnpj":""},"data_pregao":"","numero_nota":"","operacoes":[{"ativo":"","tipo":"C ou V","quantidade":null,"preco_unitario":null,"valor_total":null}],"taxas":{"corretagem":null,"emolumentos":null,"total":null},"valor_liquido":null,"observacoes":""}
+Valores em float.`,
+
+  recibo_medico: `Extraia os dados e retorne APENAS este JSON preenchido:
+{"prestador":{"nome":"","cpf_cnpj":"","crm_cro":"","especialidade":"","tipo":"pf ou pj"},"paciente":{"nome":"","parentesco":"titular/dependente/filho/conjuge"},"servico":"","data_atendimento":"","valor_pago":null,"plano_reembolso":false,"observacoes":""}
+Valor em float.`,
+
+  recibo_educacao: `Extraia os dados e retorne APENAS este JSON preenchido:
+{"instituicao":{"nome":"","cnpj":""},"aluno":{"nome":"","parentesco":"titular/dependente/filho"},"nivel_ensino":"fundamental/medio/superior/tecnico/pos/outro","periodo":"","valor_pago":null,"n_parcelas":null,"observacoes":""}
+Valor em float.`,
+
+  outro: `Extraia qualquer dado relevante e retorne APENAS um JSON com os campos que encontrar.`,
+};
+
+function buildMsgExtrair(b64, mime, texto, tipo) {
+  const content = [];
+  if (mime === 'application/pdf') {
+    content.push({ type: 'document', source: { type: 'base64', media_type: mime, data: b64 } });
+  } else {
+    content.push({ type: 'image', source: { type: 'base64', media_type: mime, data: b64 } });
+  }
+  if (texto) content.push({ type: 'text', text: `Texto extraído:\n${texto.slice(0, 3000)}` });
+  content.push({ type: 'text', text: PROMPTS_EXTRACAO[tipo] || PROMPTS_EXTRACAO.outro });
+  return [{ role: 'user', content }];
+}
+
+async function chamarClaude(messages) {
+  const resp = await fetch('/api/claude', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ apiKey: getApiKey(), messages }),
+  });
+  if (!resp.ok) {
+    const e = await resp.json();
+    throw new Error(e.error?.message || `HTTP ${resp.status}`);
+  }
+  const data = await resp.json();
+  let texto = data.content[0].text.trim();
+  // Remove blocos markdown se houver
+  if (texto.startsWith('```')) texto = texto.split('\n').slice(1,-1).join('\n');
+  // Para classificação, retorna string do tipo
+  try {
+    const parsed = JSON.parse(texto);
+    return parsed.tipo || parsed; // classificação retorna string, extração retorna objeto
+  } catch {
+    // Tenta extrair JSON de dentro do texto
+    const m = texto.match(/\{[\s\S]*\}/);
+    if (m) return JSON.parse(m[0]);
+    return texto;
+  }
+}
+
+// ════════════════════════════════════════════════════
+// REVISAR DADOS
+// ════════════════════════════════════════════════════
+function abrirDados(docId) {
+  docEditando = DB.docs.find(d => d.id === docId);
+  if (!docEditando) return;
+  document.getElementById('ov-dados-titulo').textContent = `Revisar: ${TIPO_LABEL[docEditando.tipo] || docEditando.tipo} — ${docEditando.nome}`;
+  document.getElementById('json-ed').value = JSON.stringify(docEditando.dados, null, 2);
+  document.getElementById('rev-check').checked = docEditando.revisado;
+  document.getElementById('obs-ed').value = docEditando.obs || '';
+  abrir('ov-dados');
+}
+
+function salvarDados() {
+  if (!docEditando) return;
+  try { JSON.parse(document.getElementById('json-ed').value); } catch { toast('JSON inválido', 'err'); return; }
+  docEditando.dados = JSON.parse(document.getElementById('json-ed').value);
+  docEditando.revisado = document.getElementById('rev-check').checked;
+  docEditando.obs = document.getElementById('obs-ed').value;
+  docEditando.status = docEditando.revisado ? 'revisado' : 'ok';
+  salvarDB();
+  atualizarDocRow(docEditando);
+  fechar('ov-dados');
+  toast('Dados salvos!', 'ok');
+}
+
+// ════════════════════════════════════════════════════
+// REMOVER DOC
+// ════════════════════════════════════════════════════
+function removerDoc(docId) {
+  if (!confirm('Remover este documento?')) return;
+  DB.docs = DB.docs.filter(d => d.id !== docId);
+  salvarDB();
+  const el = document.getElementById(`doc-${docId}`);
+  if (el) el.remove();
+  renderSidebar();
+  toast('Documento removido', 'ok');
+}
+
+// ════════════════════════════════════════════════════
+// EXPORTAR EXCEL
+// ════════════════════════════════════════════════════
+function exportarExcel() {
+  const docs = DB.docs.filter(d => d.clienteId === clienteAtivo.id && d.dados && ['ok','revisado'].includes(d.status));
+  if (!docs.length) { toast('Nenhum documento processado para exportar', 'err'); return; }
+
+  const wb = XLSX.utils.book_new();
+
+  // Aba Resumo
+  const resumo = [
+    ['SISTEMA IR — DADOS DO CLIENTE'],
+    [],
+    ['Nome', clienteAtivo.nome],
+    ['CPF', formatCPF(clienteAtivo.cpf)],
+    ['E-mail', clienteAtivo.email || '—'],
+    ['Telefone', clienteAtivo.tel || '—'],
+    ['Ano-Calendário', clienteAtivo.ano],
+    ['Gerado em', new Date().toLocaleString('pt-BR')],
+    [],
+    ['Documentos processados', docs.length],
+    ['Revisados', docs.filter(d => d.revisado).length],
+  ];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(resumo), '📋 Resumo');
+
+  // ── Informes de Rendimentos ──
+  const informes = docs.filter(d => d.tipo === 'informe_rendimentos');
+  if (informes.length) {
+    const rows = [
+      ['Arquivo','Fonte Pagadora','CNPJ Fonte','Titular','CPF Titular','Rend. Tributáveis','IRRF Retido','Prev. Oficial','Prev. Privada','Rend. Isentos','Rend. Excl.','Observações','Revisado?']
+    ];
+    informes.forEach(d => {
+      const j = d.dados;
+      rows.push([
+        d.nome,
+        j.fonte_pagadora?.nome||'',
+        j.fonte_pagadora?.cnpj||'',
+        j.titular?.nome||'',
+        j.titular?.cpf||'',
+        j.rendimentos_tributaveis||0,
+        j.irrf_retido||0,
+        j.previdencia_oficial||0,
+        j.previdencia_privada||0,
+        j.rendimentos_isentos||0,
+        j.rendimentos_sujeitos_exclusivo||0,
+        j.observacoes||'',
+        d.revisado ? 'Sim' : 'Não',
+      ]);
+    });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), '💼 Informes');
+  }
+
+  // ── Notas de Corretagem ──
+  const notas = docs.filter(d => d.tipo === 'nota_corretagem');
+  if (notas.length) {
+    const rows = [['Arquivo','Corretora','CNPJ','Data','Ativo','C/V','Qtd','Preço Unit','Valor Total','Corretagem','Emolumentos','Valor Líquido','Revisado?']];
+    notas.forEach(d => {
+      const j = d.dados;
+      (j.operacoes||[{}]).forEach((op, i) => {
+        rows.push([
+          i===0?d.nome:'',
+          i===0?j.corretora?.nome||'':'',
+          i===0?j.corretora?.cnpj||'':'',
+          i===0?j.data_pregao||'':'',
+          op.ativo||'', op.tipo||'', op.quantidade||0, op.preco_unitario||0, op.valor_total||0,
+          i===0?j.taxas?.corretagem||0:'',
+          i===0?j.taxas?.emolumentos||0:'',
+          i===0?j.valor_liquido||0:'',
+          i===0?d.revisado?'Sim':'Não':'',
+        ]);
+      });
+    });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), '📈 Corretagem');
+  }
+
+  // ── Recibos Médicos ──
+  const medicos = docs.filter(d => d.tipo === 'recibo_medico');
+  if (medicos.length) {
+    const rows = [['Arquivo','Prestador','CPF/CNPJ','CRM/CRO','Especialidade','Paciente','Parentesco','Serviço','Data','Valor Pago','Revisado?']];
+    medicos.forEach(d => {
+      const j = d.dados;
+      rows.push([
+        d.nome, j.prestador?.nome||'', j.prestador?.cpf_cnpj||'', j.prestador?.crm_cro||'',
+        j.prestador?.especialidade||'', j.paciente?.nome||'', j.paciente?.parentesco||'',
+        j.servico||'', j.data_atendimento||'', j.valor_pago||0,
+        d.revisado?'Sim':'Não',
+      ]);
+    });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), '🏥 Médicos');
+  }
+
+  // ── Recibos de Educação ──
+  const educacao = docs.filter(d => d.tipo === 'recibo_educacao');
+  if (educacao.length) {
+    const rows = [['Arquivo','Instituição','CNPJ','Aluno','Parentesco','Nível','Período','Valor Pago','Revisado?']];
+    educacao.forEach(d => {
+      const j = d.dados;
+      rows.push([
+        d.nome, j.instituicao?.nome||'', j.instituicao?.cnpj||'',
+        j.aluno?.nome||'', j.aluno?.parentesco||'',
+        j.nivel_ensino||'', j.periodo||'', j.valor_pago||0,
+        d.revisado?'Sim':'Não',
+      ]);
+    });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), '🎓 Educação');
+  }
+
+  XLSX.writeFile(wb, `IR_${clienteAtivo.ano}_${clienteAtivo.nome.replace(/\s+/g,'_')}.xlsx`);
+  toast('Excel gerado!', 'ok');
+}
+
+// ════════════════════════════════════════════════════
+// HELPERS
+// ════════════════════════════════════════════════════
+function fileToBase64(file) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result.split(',')[1]);
+    r.onerror = rej;
+    r.readAsDataURL(file);
+  });
+}
+
+function formatCPF(cpf) {
+  const c = (cpf||'').replace(/\D/g,'');
+  return c.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+}
+
+function maskCPF(el) {
+  let v = el.value.replace(/\D/g,'').slice(0,11);
+  v = v.replace(/(\d{3})(\d)/, '$1.$2');
+  v = v.replace(/(\d{3}\.\d{3})(\d)/, '$1.$2');
+  v = v.replace(/(\d{3}\.\d{3}\.\d{3})(\d)/, '$1-$2');
+  el.value = v;
+}
+
+function formatDate(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleString('pt-BR', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+}
+
+function abrir(id) { document.getElementById(id).classList.remove('hidden'); }
+function fechar(id) { document.getElementById(id).classList.add('hidden'); }
+
+function toast(msg, tipo='info') {
+  const el = document.createElement('div');
+  el.className = `t t-${tipo}`;
+  el.textContent = msg;
+  document.getElementById('toast').appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+// Fechar overlay clicando fora
+document.querySelectorAll('.overlay').forEach(o => o.addEventListener('click', e => { if (e.target === o) o.classList.add('hidden'); }));
+
+// ════════════════════════════════════════════════════
+// INIT
+// ════════════════════════════════════════════════════
+atualizarStatusApi();
+renderSidebar();
+</script>
+</body>
+</html>
