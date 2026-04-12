@@ -60,6 +60,7 @@ header h1{font-size:16px;font-weight:600;letter-spacing:.3px}
 .btn-verde{background:var(--verde-bg);color:var(--verde);border:1px solid #a7f3d0}
 .btn-amarelo{background:var(--amarelo-bg);color:var(--amarelo);border:1px solid #fcd34d}
 .btn-vermelho{background:var(--vermelho-bg);color:var(--vermelho);border:1px solid #fca5a5}
+.btn-azul{background:#dbeafe;color:#1d4ed8;border:1px solid #93c5fd}
 .btn-full{width:100%;justify-content:center}
 .btn:disabled{opacity:.5;cursor:not-allowed}
 
@@ -233,6 +234,43 @@ header h1{font-size:16px;font-weight:600;letter-spacing:.3px}
   </div>
 </div>
 
+<!-- ═══════════════════ MODAL: FICHAS IR ═══════════════════ -->
+<div class="overlay hidden" id="ov-ir">
+  <div class="modal" style="max-width:780px;max-height:90vh;overflow-y:auto">
+    <h3>📋 Fichas IR — <span id="ir-cliente-nome"></span></h3>
+
+    <!-- Calculadora -->
+    <div class="card" style="margin-bottom:12px;background:var(--fundo2)">
+      <div class="card-header"><h3>🧮 Simulação de Imposto</h3></div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px">
+        <div class="fg" style="flex:1;min-width:120px">
+          <label>Ano-calendário</label>
+          <select id="ir-ano" onchange="calcularIR()">
+            <option value="2025">2025</option>
+            <option value="2024">2024</option>
+          </select>
+        </div>
+        <div class="fg" style="flex:1;min-width:140px">
+          <label>Dependentes</label>
+          <input type="number" id="ir-dep" value="0" min="0" oninput="calcularIR()">
+        </div>
+        <div class="fg" style="flex:1;min-width:140px">
+          <label>Outras deduções (R$)</label>
+          <input type="number" id="ir-outras-ded" value="0" min="0" step="0.01" oninput="calcularIR()">
+        </div>
+      </div>
+      <div id="ir-resultado" style="margin-top:12px"></div>
+    </div>
+
+    <!-- Resumo por ficha -->
+    <div id="ir-fichas"></div>
+
+    <div class="modal-acts" style="margin-top:12px">
+      <button class="btn btn-ghost" onclick="fechar('ov-ir')">Fechar</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ════════════════════════════════════════════════════
 // ESTADO GLOBAL
@@ -338,6 +376,7 @@ function renderMain() {
       <div class="card-header">
         <h3>👤 ${clienteAtivo.nome} · ${clienteAtivo.ano}</h3>
         <div class="card-actions">
+          <button class="btn btn-azul" onclick="abrirFichasIR()">📋 Fichas IR</button>
           <button class="btn btn-verde" onclick="exportarExcel()">⬇ Excel</button>
           <button class="btn btn-vermelho btn-ghost" onclick="removerCliente('${clienteAtivo.id}')">Remover</button>
         </div>
@@ -866,6 +905,224 @@ function toast(msg, tipo='info') {
   el.textContent = msg;
   document.getElementById('toast').appendChild(el);
   setTimeout(() => el.remove(), 3500);
+}
+
+// ════════════════════════════════════════════════════
+// FICHAS IR
+// ════════════════════════════════════════════════════
+const TABELAS = {
+  2024: {
+    faixas: [
+      {ate:26963.20, aliq:0,     deducao:0},
+      {ate:33919.80, aliq:0.075, deducao:2022.24},
+      {ate:45012.60, aliq:0.15,  deducao:4566.23},
+      {ate:55976.16, aliq:0.225, deducao:7942.17},
+      {ate:Infinity, aliq:0.275, deducao:10740.98},
+    ],
+    deducaoDependente: 2275.08,
+    limiteEducacao: 3561.50,
+    limiteSimplificado: 16754.34,
+    descSimplificado: 0.20,
+  },
+  2025: {
+    faixas: [
+      {ate:33888.00, aliq:0,     deducao:0},
+      {ate:45012.60, aliq:0.075, deducao:2533.49},
+      {ate:55976.16, aliq:0.15,  deducao:5957.27},
+      {ate:82889.90, aliq:0.225, deducao:10143.48},
+      {ate:Infinity, aliq:0.275, deducao:14288.98},
+    ],
+    deducaoDependente: 2275.08,
+    limiteEducacao: 3561.50,
+    limiteSimplificado: 16754.34,
+    descSimplificado: 0.20,
+  },
+};
+
+function calcImposto(baseCalculo, ano) {
+  const tab = TABELAS[ano] || TABELAS[2025];
+  for (const f of tab.faixas) {
+    if (baseCalculo <= f.ate) {
+      return Math.max(0, baseCalculo * f.aliq - f.deducao);
+    }
+  }
+  return 0;
+}
+
+function fmt(v) { return (v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); }
+
+function abrirFichasIR() {
+  if (!clienteAtivo) return;
+  document.getElementById('ir-cliente-nome').textContent = `${clienteAtivo.nome} · ${clienteAtivo.ano}`;
+  document.getElementById('ir-ano').value = clienteAtivo.ano;
+  document.getElementById('ir-dep').value = 0;
+  document.getElementById('ir-outras-ded').value = 0;
+  renderFichas();
+  calcularIR();
+  abrir('ov-ir');
+}
+
+function renderFichas() {
+  const docs = DB.docs.filter(d => d.clienteId === clienteAtivo.id && d.dados && ['ok','revisado'].includes(d.status));
+  const el = document.getElementById('ir-fichas');
+
+  // Informes de rendimentos
+  const informes = docs.filter(d => d.tipo === 'informe_rendimentos');
+  const medicos  = docs.filter(d => d.tipo === 'recibo_medico');
+  const educacao = docs.filter(d => d.tipo === 'recibo_educacao');
+  const corretagem = docs.filter(d => d.tipo === 'nota_corretagem');
+
+  let html = '';
+
+  // Ficha: Rendimentos
+  if (informes.length) {
+    const totalTrib   = informes.reduce((s,d) => s + (d.dados.rendimentos_tributaveis||0), 0);
+    const totalIRRF   = informes.reduce((s,d) => s + (d.dados.irrf_retido||0), 0);
+    const totalPrevOf = informes.reduce((s,d) => s + (d.dados.previdencia_oficial||0), 0);
+    const totalPrevPr = informes.reduce((s,d) => s + (d.dados.previdencia_privada||0), 0);
+    const totalIsentos= informes.reduce((s,d) => s + (d.dados.rendimentos_isentos||0), 0);
+    html += `<div class="card" style="margin-bottom:10px">
+      <div class="card-header"><h3>💼 Rendimentos Tributáveis (${informes.length} informe${informes.length>1?'s':''})</h3></div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:8px">
+        <tr style="background:var(--fundo2)"><th style="text-align:left;padding:5px 8px">Fonte Pagadora</th><th style="text-align:right;padding:5px 8px">Rend. Trib.</th><th style="text-align:right;padding:5px 8px">IRRF</th><th style="text-align:right;padding:5px 8px">Prev. Oficial</th></tr>
+        ${informes.map(d=>`<tr style="border-top:1px solid var(--borda)">
+          <td style="padding:5px 8px">${d.dados.fonte_pagadora?.nome||d.nome}</td>
+          <td style="text-align:right;padding:5px 8px">${fmt(d.dados.rendimentos_tributaveis)}</td>
+          <td style="text-align:right;padding:5px 8px">${fmt(d.dados.irrf_retido)}</td>
+          <td style="text-align:right;padding:5px 8px">${fmt(d.dados.previdencia_oficial)}</td>
+        </tr>`).join('')}
+        <tr style="border-top:2px solid var(--borda);font-weight:600;background:var(--fundo2)">
+          <td style="padding:5px 8px">TOTAL</td>
+          <td style="text-align:right;padding:5px 8px">${fmt(totalTrib)}</td>
+          <td style="text-align:right;padding:5px 8px">${fmt(totalIRRF)}</td>
+          <td style="text-align:right;padding:5px 8px">${fmt(totalPrevOf)}</td>
+        </tr>
+      </table>
+      ${totalIsentos ? `<div style="font-size:11px;color:var(--texto2);margin-top:6px;padding:0 8px">Rendimentos isentos: ${fmt(totalIsentos)} &nbsp;|&nbsp; Prev. privada: ${fmt(totalPrevPr)}</div>` : ''}
+    </div>`;
+  }
+
+  // Ficha: Médico
+  if (medicos.length) {
+    const total = medicos.reduce((s,d) => s + (d.dados.valor_pago||0), 0);
+    html += `<div class="card" style="margin-bottom:10px">
+      <div class="card-header"><h3>🏥 Despesas Médicas (${medicos.length} recibo${medicos.length>1?'s':''})</h3></div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:8px">
+        <tr style="background:var(--fundo2)"><th style="text-align:left;padding:5px 8px">Prestador</th><th style="text-align:left;padding:5px 8px">Paciente</th><th style="text-align:right;padding:5px 8px">Valor</th></tr>
+        ${medicos.map(d=>`<tr style="border-top:1px solid var(--borda)">
+          <td style="padding:5px 8px">${d.dados.prestador?.nome||'—'}</td>
+          <td style="padding:5px 8px">${d.dados.paciente?.nome||'—'}</td>
+          <td style="text-align:right;padding:5px 8px">${fmt(d.dados.valor_pago)}</td>
+        </tr>`).join('')}
+        <tr style="border-top:2px solid var(--borda);font-weight:600;background:var(--fundo2)">
+          <td colspan="2" style="padding:5px 8px">TOTAL <span style="font-size:10px;font-weight:400;color:var(--texto2)">(dedução integral)</span></td>
+          <td style="text-align:right;padding:5px 8px">${fmt(total)}</td>
+        </tr>
+      </table>
+    </div>`;
+  }
+
+  // Ficha: Educação
+  if (educacao.length) {
+    const tab = TABELAS[clienteAtivo.ano] || TABELAS[2025];
+    const total = educacao.reduce((s,d) => s + (d.dados.valor_pago||0), 0);
+    const limitado = Math.min(total, tab.limiteEducacao);
+    html += `<div class="card" style="margin-bottom:10px">
+      <div class="card-header"><h3>🎓 Despesas de Educação (${educacao.length} recibo${educacao.length>1?'s':''})</h3></div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:8px">
+        <tr style="background:var(--fundo2)"><th style="text-align:left;padding:5px 8px">Instituição</th><th style="text-align:left;padding:5px 8px">Aluno</th><th style="text-align:right;padding:5px 8px">Valor</th></tr>
+        ${educacao.map(d=>`<tr style="border-top:1px solid var(--borda)">
+          <td style="padding:5px 8px">${d.dados.instituicao?.nome||'—'}</td>
+          <td style="padding:5px 8px">${d.dados.aluno?.nome||'—'}</td>
+          <td style="text-align:right;padding:5px 8px">${fmt(d.dados.valor_pago)}</td>
+        </tr>`).join('')}
+        <tr style="border-top:2px solid var(--borda);font-weight:600;background:var(--fundo2)">
+          <td colspan="2" style="padding:5px 8px">TOTAL pago &nbsp;<span style="font-size:10px;font-weight:400;color:var(--texto2)">limite: ${fmt(tab.limiteEducacao)}</span></td>
+          <td style="text-align:right;padding:5px 8px">${fmt(total)}</td>
+        </tr>
+        ${total > tab.limiteEducacao ? `<tr style="background:#fef3c7"><td colspan="2" style="padding:5px 8px;font-size:11px;color:#92400e">⚠️ Valor excede o limite — dedução limitada a</td><td style="text-align:right;padding:5px 8px;font-size:11px;color:#92400e">${fmt(limitado)}</td></tr>` : ''}
+      </table>
+    </div>`;
+  }
+
+  // Ficha: Corretagem
+  if (corretagem.length) {
+    const totalLiq = corretagem.reduce((s,d) => s + (d.dados.valor_liquido||0), 0);
+    html += `<div class="card" style="margin-bottom:10px">
+      <div class="card-header"><h3>📈 Notas de Corretagem (${corretagem.length} nota${corretagem.length>1?'s':''})</h3></div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:8px">
+        <tr style="background:var(--fundo2)"><th style="text-align:left;padding:5px 8px">Corretora</th><th style="text-align:left;padding:5px 8px">Data</th><th style="text-align:right;padding:5px 8px">Valor Líquido</th></tr>
+        ${corretagem.map(d=>`<tr style="border-top:1px solid var(--borda)">
+          <td style="padding:5px 8px">${d.dados.corretora?.nome||'—'}</td>
+          <td style="padding:5px 8px">${d.dados.data_pregao||'—'}</td>
+          <td style="text-align:right;padding:5px 8px">${fmt(d.dados.valor_liquido)}</td>
+        </tr>`).join('')}
+        <tr style="border-top:2px solid var(--borda);font-weight:600;background:var(--fundo2)">
+          <td colspan="2" style="padding:5px 8px">TOTAL</td>
+          <td style="text-align:right;padding:5px 8px">${fmt(totalLiq)}</td>
+        </tr>
+      </table>
+    </div>`;
+  }
+
+  if (!html) html = '<p style="font-size:12px;color:var(--texto2);text-align:center;padding:20px">Nenhum documento processado ainda. Envie os documentos do cliente primeiro.</p>';
+
+  el.innerHTML = html;
+}
+
+function calcularIR() {
+  const ano = parseInt(document.getElementById('ir-ano').value);
+  const dep = parseInt(document.getElementById('ir-dep').value) || 0;
+  const outrasDed = parseFloat(document.getElementById('ir-outras-ded').value) || 0;
+  const tab = TABELAS[ano] || TABELAS[2025];
+
+  const docs = DB.docs.filter(d => d.clienteId === clienteAtivo?.id && d.dados && ['ok','revisado'].includes(d.status));
+
+  const totalTrib   = docs.filter(d=>d.tipo==='informe_rendimentos').reduce((s,d)=>s+(d.dados.rendimentos_tributaveis||0),0);
+  const totalIRRF   = docs.filter(d=>d.tipo==='informe_rendimentos').reduce((s,d)=>s+(d.dados.irrf_retido||0),0);
+  const totalPrevOf = docs.filter(d=>d.tipo==='informe_rendimentos').reduce((s,d)=>s+(d.dados.previdencia_oficial||0),0);
+  const totalMed    = docs.filter(d=>d.tipo==='recibo_medico').reduce((s,d)=>s+(d.dados.valor_pago||0),0);
+  const totalEdu    = docs.filter(d=>d.tipo==='recibo_educacao').reduce((s,d)=>s+(d.dados.valor_pago||0),0);
+  const eduLimitado = Math.min(totalEdu, tab.limiteEducacao);
+
+  const dedDep      = dep * tab.deducaoDependente;
+  const dedCompleta = totalPrevOf + totalMed + eduLimitado + dedDep + outrasDed;
+  const baseCompleta= Math.max(0, totalTrib - dedCompleta);
+  const impostoCompleto = calcImposto(baseCompleta, ano);
+  const saldoCompleto   = impostoCompleto - totalIRRF;
+
+  // Desconto simplificado
+  const descSimpl   = Math.min(totalTrib * tab.descSimplificado, tab.limiteSimplificado);
+  const baseSimpl   = Math.max(0, totalTrib - descSimpl);
+  const impostoSimpl= calcImposto(baseSimpl, ano);
+  const saldoSimpl  = impostoSimpl - totalIRRF;
+
+  const melhor = saldoCompleto <= saldoSimpl ? 'completo' : 'simplificado';
+
+  function saldoHtml(saldo, destaque) {
+    const cor = saldo > 0 ? 'var(--vermelho)' : 'var(--verde)';
+    const txt = saldo > 0 ? `⚠️ Imposto a PAGAR: ${fmt(saldo)}` : `✅ Restituição a RECEBER: ${fmt(Math.abs(saldo))}`;
+    const borda = destaque ? '2px solid var(--azul)' : '1px solid var(--borda)';
+    return `<div style="border:${borda};border-radius:8px;padding:10px 14px;color:${cor};font-size:13px;font-weight:600">${txt}${destaque?` <span style="font-size:10px;color:var(--azul);margin-left:8px">👈 mais vantajoso</span>`:''}</div>`;
+  }
+
+  document.getElementById('ir-resultado').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px">
+      <div>
+        <div style="font-size:11px;font-weight:600;color:var(--texto2);margin-bottom:4px">DEDUÇÃO COMPLETA</div>
+        <div style="font-size:11px;color:var(--texto2);margin-bottom:4px">Base: ${fmt(baseCompleta)} · Imposto: ${fmt(impostoCompleto)}</div>
+        ${saldoHtml(saldoCompleto, melhor==='completo')}
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:600;color:var(--texto2);margin-bottom:4px">DESCONTO SIMPLIFICADO (${(tab.descSimplificado*100).toFixed(0)}%)</div>
+        <div style="font-size:11px;color:var(--texto2);margin-bottom:4px">Base: ${fmt(baseSimpl)} · Imposto: ${fmt(impostoSimpl)}</div>
+        ${saldoHtml(saldoSimpl, melhor==='simplificado')}
+      </div>
+    </div>
+    <div style="font-size:11px;color:var(--texto2);background:var(--fundo2);padding:8px 12px;border-radius:6px">
+      📌 Rendimentos tributáveis: ${fmt(totalTrib)} &nbsp;|&nbsp; IRRF já retido: ${fmt(totalIRRF)} &nbsp;|&nbsp; Prev. oficial: ${fmt(totalPrevOf)} &nbsp;|&nbsp; Médico: ${fmt(totalMed)} &nbsp;|&nbsp; Educação (limitado): ${fmt(eduLimitado)} &nbsp;|&nbsp; Dependentes (${dep}): ${fmt(dedDep)}
+    </div>
+  `;
 }
 
 // Fechar overlay clicando fora
