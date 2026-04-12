@@ -266,7 +266,7 @@ header h1{font-size:16px;font-weight:600;letter-spacing:.3px}
     <div id="ir-fichas"></div>
 
     <div class="modal-acts" style="margin-top:12px">
-      <button class="btn btn-ghost" onclick="fechar('ov-ir')">Fechar</button>
+      <button class="btn btn-ghost" onclick="fecharFichasIR()">Fechar</button>
     </div>
   </div>
 </div>
@@ -965,25 +965,29 @@ function fmt(v) { return (v||0).toLocaleString('pt-BR',{style:'currency',currenc
 
 function salvarSimulacao() {
   if (!clienteAtivo) return;
-  const key = `ir_sim_${clienteAtivo.id}`;
-  localStorage.setItem(key, JSON.stringify({
+  clienteAtivo.irSim = {
     dep: document.getElementById('ir-dep').value,
     outras: document.getElementById('ir-outras-ded').value,
     ano: document.getElementById('ir-ano').value,
-  }));
+  };
+  salvarDB();
   calcularIR();
+}
+
+function fecharFichasIR() {
+  salvarSimulacao();
+  fechar('ov-ir');
 }
 
 function abrirFichasIR() {
   if (!clienteAtivo) return;
   document.getElementById('ir-cliente-nome').textContent = `${clienteAtivo.nome} · ${clienteAtivo.ano}`;
 
-  // Restaurar valores salvos
-  const key = `ir_sim_${clienteAtivo.id}`;
-  const salvo = JSON.parse(localStorage.getItem(key) || '{}');
-  document.getElementById('ir-ano').value = salvo.ano || clienteAtivo.ano;
-  document.getElementById('ir-dep').value = salvo.dep || 0;
-  document.getElementById('ir-outras-ded').value = salvo.outras || 0;
+  // Restaurar valores salvos no cliente
+  const sim = clienteAtivo.irSim || {};
+  document.getElementById('ir-ano').value = sim.ano || clienteAtivo.ano;
+  document.getElementById('ir-dep').value = sim.dep !== undefined ? sim.dep : 0;
+  document.getElementById('ir-outras-ded').value = sim.outras !== undefined ? sim.outras : 0;
 
   renderFichas();
   calcularIR();
@@ -1154,7 +1158,12 @@ function calcularIR() {
 }
 
 // Fechar overlay clicando fora
-document.querySelectorAll('.overlay').forEach(o => o.addEventListener('click', e => { if (e.target === o) o.classList.add('hidden'); }));
+document.querySelectorAll('.overlay').forEach(o => o.addEventListener('click', e => {
+  if (e.target === o) {
+    if (o.id === 'ov-ir') fecharFichasIR();
+    else o.classList.add('hidden');
+  }
+}));
 
 // ════════════════════════════════════════════════════
 // INIT
