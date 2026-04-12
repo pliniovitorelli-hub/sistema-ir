@@ -481,11 +481,23 @@ async function processarArquivos(files) {
     const ext = file.name.split('.').pop().toLowerCase();
     if (!['pdf','png','jpg','jpeg'].includes(ext)) continue;
 
+    // Verificar duplicado (mesmo nome + mesmo tamanho)
+    const jaExiste = DB.docs.some(d =>
+      d.clienteId === clienteAtivo.id &&
+      d.nome === file.name &&
+      d.tamanho === file.size
+    );
+    if (jaExiste) {
+      toast(`⚠️ "${file.name}" já foi enviado anteriormente.`, 'info');
+      continue;
+    }
+
     // Cria doc no estado
     const doc = {
       id: Date.now().toString() + Math.random().toString(36).slice(2),
       clienteId: clienteAtivo.id,
       nome: file.name,
+      tamanho: file.size,
       tipo: null,
       status: 'processando',
       progresso: 10,
