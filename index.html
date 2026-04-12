@@ -653,8 +653,12 @@ Valores em float.`,
 Valor em float.`,
 
   recibo_educacao: `Extraia os dados e retorne APENAS este JSON preenchido:
-{"instituicao":{"nome":"","cnpj":""},"aluno":{"nome":"","parentesco":"titular/dependente/filho"},"nivel_ensino":"fundamental/medio/superior/tecnico/pos/outro","periodo":"","valor_pago":null,"n_parcelas":null,"observacoes":""}
-Valor em float.`,
+{"instituicao":{"nome":"","cnpj":""},"alunos":[{"nome":"","parentesco":"titular/dependente/filho","valor_pago":null}],"nivel_ensino":"fundamental/medio/superior/tecnico/pos/outro","periodo":"","valor_pago":null,"n_parcelas":null,"observacoes":""}
+IMPORTANTE:
+- Se houver múltiplos alunos, liste TODOS no array "alunos" com o valor_pago individual de cada um.
+- Em "valor_pago" (raiz) coloque a SOMA de todos os alunos.
+- Converta valores do formato brasileiro (ex: 25.006,42) para float sem pontos e com ponto decimal (25006.42).
+- Inclua matrícula + mensalidades no valor de cada aluno.`,
 
   outro: `Extraia qualquer dado relevante e retorne APENAS um JSON com os campos que encontrar.`,
 };
@@ -864,12 +868,23 @@ function exportarExcel() {
     const rows = [['Arquivo','Instituição','CNPJ','Aluno','Parentesco','Nível','Período','Valor Pago','Revisado?']];
     educacao.forEach(d => {
       const j = d.dados;
-      rows.push([
-        d.nome, j.instituicao?.nome||'', j.instituicao?.cnpj||'',
-        j.aluno?.nome||'', j.aluno?.parentesco||'',
-        j.nivel_ensino||'', j.periodo||'', j.valor_pago||0,
-        d.revisado?'Sim':'Não',
-      ]);
+      if (j.alunos && j.alunos.length) {
+        j.alunos.forEach(a => {
+          rows.push([
+            d.nome, j.instituicao?.nome||'', j.instituicao?.cnpj||'',
+            a.nome||'', a.parentesco||'',
+            j.nivel_ensino||'', j.periodo||'', a.valor_pago||0,
+            d.revisado?'Sim':'Não',
+          ]);
+        });
+      } else {
+        rows.push([
+          d.nome, j.instituicao?.nome||'', j.instituicao?.cnpj||'',
+          j.aluno?.nome||'', j.aluno?.parentesco||'',
+          j.nivel_ensino||'', j.periodo||'', j.valor_pago||0,
+          d.revisado?'Sim':'Não',
+        ]);
+      }
     });
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), '🎓 Educação');
   }
@@ -1059,17 +1074,31 @@ function renderFichas() {
     const tab = TABELAS[clienteAtivo.ano] || TABELAS[2025];
     const total = educacao.reduce((s,d) => s + (d.dados.valor_pago||0), 0);
     const limitado = Math.min(total, tab.limiteEducacao);
+
+    // Gera linhas — suporta alunos[] (novo schema) e aluno (schema antigo)
+    const linhasEdu = educacao.flatMap(d => {
+      const j = d.dados;
+      if (j.alunos && j.alunos.length) {
+        return j.alunos.map(a => ({
+          inst: j.instituicao?.nome || d.nome,
+          aluno: a.nome || '—',
+          valor: a.valor_pago || 0,
+        }));
+      }
+      return [{ inst: j.instituicao?.nome || d.nome, aluno: j.aluno?.nome || '—', valor: j.valor_pago || 0 }];
+    });
+
     html += `<div class="card" style="margin-bottom:10px">
-      <div class="card-header"><h3>🎓 Despesas de Educação (${educacao.length} recibo${educacao.length>1?'s':''})</h3></div>
+      <div class="card-header"><h3>🎓 Despesas de Educação (${educacao.length} documento${educacao.length>1?'s':''})</h3></div>
       <table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:8px">
         <tr style="background:var(--fundo2)"><th style="text-align:left;padding:5px 8px">Instituição</th><th style="text-align:left;padding:5px 8px">Aluno</th><th style="text-align:right;padding:5px 8px">Valor</th></tr>
-        ${educacao.map(d=>`<tr style="border-top:1px solid var(--borda)">
-          <td style="padding:5px 8px">${d.dados.instituicao?.nome||'—'}</td>
-          <td style="padding:5px 8px">${d.dados.aluno?.nome||'—'}</td>
-          <td style="text-align:right;padding:5px 8px">${fmt(d.dados.valor_pago)}</td>
+        ${linhasEdu.map(l=>`<tr style="border-top:1px solid var(--borda)">
+          <td style="padding:5px 8px">${l.inst}</td>
+          <td style="padding:5px 8px">${l.aluno}</td>
+          <td style="text-align:right;padding:5px 8px">${fmt(l.valor)}</td>
         </tr>`).join('')}
         <tr style="border-top:2px solid var(--borda);font-weight:600;background:var(--fundo2)">
-          <td colspan="2" style="padding:5px 8px">TOTAL pago &nbsp;<span style="font-size:10px;font-weight:400;color:var(--texto2)">limite: ${fmt(tab.limiteEducacao)}</span></td>
+          <td colspan="2" style="padding:5px 8px">TOTAL pago &nbsp;<span style="font-size:10px;font-weight:400;color:var(--texto2)">limite dedutível: ${fmt(tab.limiteEducacao)}</span></td>
           <td style="text-align:right;padding:5px 8px">${fmt(total)}</td>
         </tr>
         ${total > tab.limiteEducacao ? `<tr style="background:#fef3c7"><td colspan="2" style="padding:5px 8px;font-size:11px;color:#92400e">⚠️ Valor excede o limite — dedução limitada a</td><td style="text-align:right;padding:5px 8px;font-size:11px;color:#92400e">${fmt(limitado)}</td></tr>` : ''}
