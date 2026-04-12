@@ -199,6 +199,22 @@ header h1{font-size:16px;font-weight:600;letter-spacing:.3px}
   </div>
 </div>
 
+<!-- ═══════════════════ MODAL: SENHA PDF ═══════════════════ -->
+<div class="overlay hidden" id="ov-senha">
+  <div class="modal" style="max-width:420px">
+    <h3>🔒 PDF protegido por senha</h3>
+    <p id="ov-senha-nome" style="font-size:12px;color:var(--texto2);margin-bottom:12px"></p>
+    <div class="fg">
+      <label>Senha do PDF</label>
+      <input type="password" id="senha-pdf-input" placeholder="Digite a senha do arquivo..." onkeydown="if(event.key==='Enter') resolverSenhaPDF(this.value)">
+    </div>
+    <div class="modal-acts">
+      <button class="btn btn-ghost" onclick="resolverSenhaPDF(null)">Cancelar</button>
+      <button class="btn btn-primary" onclick="resolverSenhaPDF(document.getElementById('senha-pdf-input').value)">Confirmar</button>
+    </div>
+  </div>
+</div>
+
 <!-- ═══════════════════ MODAL: EDITAR DADOS ═══════════════════ -->
 <div class="overlay hidden" id="ov-dados">
   <div class="modal" style="max-width:680px">
@@ -491,13 +507,49 @@ async function processarComClaude(doc, file) {
 
     setProgresso(doc, 40, 'Classificando documento…');
 
-    // 2. Classificar
-    const tipo = await chamarClaude(buildMsgClassificar(base64, mediaType, texto));
-    doc.tipo = tipo;
-    setProgresso(doc, 60, `Extraindo dados: ${TIPO_LABEL[tipo] || tipo}…`);
+    let tipo, dados;
 
-    // 3. Extrair dados
-    const dados = await chamarClaude(buildMsgExtrair(base64, mediaType, texto, tipo));
+    try {
+      // 2. Classificar
+      tipo = await chamarClaude(buildMsgClassificar(base64, mediaType, texto));
+      doc.tipo = tipo;
+      setProgresso(doc, 60, `Extraindo dados: ${TIPO_LABEL[tipo] || tipo}…`);
+      // 3. Extrair dados
+      dados = await chamarClaude(buildMsgExtrair(base64, mediaType, texto, tipo));
+
+    } catch (e) {
+      // PDF com senha → pedir senha e tentar apenas com texto extraído
+      if (e.message && e.message.toLowerCase().includes('password protected')) {
+        const senha = await pedirSenhaPDF(doc.nome);
+        if (!senha) throw new Error('PDF protegido por senha — processamento cancelado.');
+
+        setProgresso(doc, 30, '🔓 Extraindo texto com senha…');
+        try {
+          const ab = await file.arrayBuffer();
+          const pdf = await pdfjsLib.getDocument({ data: ab, password: senha }).promise;
+          const pages = [];
+          for (let i = 1; i <= Math.min(pdf.numPages, 8); i++) {
+            const p = await pdf.getPage(i);
+            const tc = await p.getTextContent();
+            pages.push(tc.items.map(s => s.str).join(' '));
+          }
+          texto = pages.join('\n');
+        } catch {
+          throw new Error('Senha incorreta ou não foi possível abrir o PDF.');
+        }
+
+        if (!texto.trim()) throw new Error('Não foi possível extrair texto do PDF protegido.');
+
+        setProgresso(doc, 40, 'Classificando documento…');
+        tipo = await chamarClaude(buildMsgClassificarTexto(texto));
+        doc.tipo = tipo;
+        setProgresso(doc, 60, `Extraindo dados: ${TIPO_LABEL[tipo] || tipo}…`);
+        dados = await chamarClaude(buildMsgExtrairTexto(texto, tipo));
+      } else {
+        throw e;
+      }
+    }
+
     doc.dados = dados;
     doc.status = 'ok';
     doc.progresso = 100;
@@ -566,6 +618,37 @@ function buildMsgExtrair(b64, mime, texto, tipo) {
   if (texto) content.push({ type: 'text', text: `Texto extraído:\n${texto.slice(0, 3000)}` });
   content.push({ type: 'text', text: PROMPTS_EXTRACAO[tipo] || PROMPTS_EXTRACAO.outro });
   return [{ role: 'user', content }];
+}
+
+// Versões texto-only para PDFs com senha (Claude API não aceita PDF criptografado)
+function buildMsgClassificarTexto(texto) {
+  return [{ role: 'user', content: [
+    { type: 'text', text: `Texto extraído de um documento fiscal brasileiro:\n${texto.slice(0, 4000)}` },
+    { type: 'text', text: `Classifique este documento. Retorne APENAS um JSON: {"tipo":"VALOR"}\nVALOR deve ser um de: informe_rendimentos | nota_corretagem | recibo_medico | recibo_educacao | outro` }
+  ]}];
+}
+
+function buildMsgExtrairTexto(texto, tipo) {
+  return [{ role: 'user', content: [
+    { type: 'text', text: `Texto extraído de um documento fiscal brasileiro:\n${texto.slice(0, 4000)}` },
+    { type: 'text', text: PROMPTS_EXTRACAO[tipo] || PROMPTS_EXTRACAO.outro }
+  ]}];
+}
+
+// Modal de senha para PDF protegido
+let _senhaPDFResolve = null;
+function pedirSenhaPDF(nomeArquivo) {
+  return new Promise(resolve => {
+    _senhaPDFResolve = resolve;
+    document.getElementById('ov-senha-nome').textContent = `Arquivo: ${nomeArquivo}`;
+    document.getElementById('senha-pdf-input').value = '';
+    abrir('ov-senha');
+    setTimeout(() => document.getElementById('senha-pdf-input').focus(), 150);
+  });
+}
+function resolverSenhaPDF(senha) {
+  fechar('ov-senha');
+  if (_senhaPDFResolve) { _senhaPDFResolve(senha || null); _senhaPDFResolve = null; }
 }
 
 async function chamarClaude(messages) {
