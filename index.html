@@ -540,7 +540,7 @@ async function processarArquivos(files) {
     fila.push({ doc, file });
   }
 
-  // Processa um por vez com intervalo de 3s para evitar rate limit
+  // Processa um por vez — em caso de rate limit, aguarda e retenta automaticamente
   for (let i = 0; i < fila.length; i++) {
     const { doc, file } = fila[i];
     doc.status = 'processando';
@@ -548,7 +548,7 @@ async function processarArquivos(files) {
     doc.progLabel = `Processando (${i+1}/${fila.length})…`;
     atualizarDocRow(doc);
     await processarComClaude(doc, file);
-    if (i < fila.length - 1) await new Promise(r => setTimeout(r, 3000));
+    if (i < fila.length - 1) await new Promise(r => setTimeout(r, 2000));
   }
 }
 
@@ -561,6 +561,19 @@ async function reprocessar(docId) {
 }
 
 async function processarComClaude(doc, file) {
+  // Ouve evento de rate limit e atualiza o status do doc com contagem regressiva
+  doc._rateLimitHandler = (e) => {
+    let restante = e.detail.espera;
+    doc.status = 'processando';
+    const tick = setInterval(() => {
+      restante--;
+      setProgresso(doc, doc.progresso, `⏳ Limite atingido — aguardando ${restante}s para continuar…`);
+      if (restante <= 0) clearInterval(tick);
+    }, 1000);
+    setProgresso(doc, doc.progresso, `⏳ Limite atingido — aguardando ${restante}s para continuar…`);
+  };
+  document.addEventListener('rate-limit-wait', doc._rateLimitHandler);
+
   try {
     // 1. Converter arquivo para base64
     setProgresso(doc, 20, 'Convertendo arquivo…');
@@ -609,6 +622,8 @@ async function processarComClaude(doc, file) {
     salvarDB();
     atualizarDocRow(doc);
     toast(`Erro em ${doc.nome}: ${doc.erroMsg}`, 'err');
+  } finally {
+    document.removeEventListener('rate-limit-wait', doc._rateLimitHandler);
   }
 }
 
@@ -665,26 +680,35 @@ function buildMsgExtrair(b64, mime, texto, tipo) {
   return [{ role: 'user', content }];
 }
 
-async function chamarClaude(messages) {
+async function chamarClaude(messages, _tentativa = 1) {
   const resp = await fetch('/api/claude', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ apiKey: getApiKey(), messages }),
   });
+
+  // Rate limit — aguarda 60s e retenta automaticamente (até 5x)
+  if (resp.status === 429) {
+    if (_tentativa > 5) throw new Error('Limite de tentativas atingido. Tente novamente mais tarde.');
+    const espera = 62; // segundos
+    toast(`⏳ Limite de requisições atingido. Aguardando ${espera}s… (tentativa ${_tentativa}/5)`, 'info');
+    // Sinaliza visualmente via evento customizado para o doc em processamento
+    document.dispatchEvent(new CustomEvent('rate-limit-wait', { detail: { espera } }));
+    await new Promise(r => setTimeout(r, espera * 1000));
+    return chamarClaude(messages, _tentativa + 1);
+  }
+
   if (!resp.ok) {
     const e = await resp.json();
     throw new Error(e.error?.message || `HTTP ${resp.status}`);
   }
   const data = await resp.json();
   let texto = data.content[0].text.trim();
-  // Remove blocos markdown se houver
   if (texto.startsWith('```')) texto = texto.split('\n').slice(1,-1).join('\n');
-  // Para classificação, retorna string do tipo
   try {
     const parsed = JSON.parse(texto);
-    return parsed.tipo || parsed; // classificação retorna string, extração retorna objeto
+    return parsed.tipo || parsed;
   } catch {
-    // Tenta extrair JSON de dentro do texto
     const m = texto.match(/\{[\s\S]*\}/);
     if (m) return JSON.parse(m[0]);
     return texto;
