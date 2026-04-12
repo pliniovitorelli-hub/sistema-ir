@@ -139,32 +139,6 @@ header h1{font-size:16px;font-weight:600;letter-spacing:.3px}
 
 .sep{height:1px;background:var(--borda);margin:8px 0}
 .hidden{display:none!important}
-
-/* ── Fichas IR ── */
-.ficha-card{border:1px solid var(--borda);border-radius:8px;margin-bottom:14px;overflow:hidden}
-.ficha-header{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--azul-bg);border-bottom:1px solid var(--borda)}
-.ficha-num{background:var(--azul);color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;white-space:nowrap}
-.ficha-header h4{flex:1;font-size:13px;font-weight:600;margin:0}
-.ficha-total{font-size:13px;font-weight:700;color:var(--azul);white-space:nowrap}
-.ficha-table{width:100%;border-collapse:collapse;font-size:12px}
-.ficha-table th{background:var(--cinza);padding:7px 10px;text-align:left;font-weight:600;color:var(--texto2);border-bottom:1px solid var(--borda)}
-.ficha-table td{padding:7px 10px;border-bottom:1px solid var(--borda)}
-.ficha-table tr:last-child td{border-bottom:none}
-.ficha-table tr:hover td{background:var(--azul-bg)}
-.ficha-empty{padding:14px;text-align:center;color:var(--texto2);font-size:12px}
-.ficha-total-row{background:var(--verde-bg)!important}
-.ficha-total-row td{font-weight:700;color:var(--verde)}
-
-/* ── Checklist ── */
-.chk-list{list-style:none;padding:0}
-.chk-item{display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid var(--borda);font-size:12px}
-.chk-item:last-child{border-bottom:none}
-.chk-ic{font-size:16px;flex-shrink:0;margin-top:1px}
-.chk-txt strong{display:block;font-size:12px;font-weight:600}
-.chk-txt span{color:var(--texto2);font-size:11px}
-
-/* ── Modal fichas grande ── */
-.modal-fichas{background:#fff;border-radius:12px;padding:24px;width:100%;max-width:860px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)}
 @keyframes spin{to{transform:rotate(360deg)}}
 .spin{display:inline-block;width:12px;height:12px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;animation:spin .6s linear infinite}
 </style>
@@ -174,12 +148,7 @@ header h1{font-size:16px;font-weight:600;letter-spacing:.3px}
 <!-- ═══════════════════ HEADER ═══════════════════ -->
 <header>
   <h1>📊 Sistema IR — Painel do Contador</h1>
-  <div class="header-right">
-    <div class="api-pill" onclick="abrirConfig()" id="api-status">
-      <span class="dot off" id="api-dot"></span>
-      <span id="api-label">Configurar API Key</span>
-    </div>
-  </div>
+  <div class="header-right"></div>
 </header>
 
 <!-- ═══════════════════ LAYOUT ═══════════════════ -->
@@ -207,34 +176,6 @@ header h1{font-size:16px;font-weight:600;letter-spacing:.3px}
 
 <!-- ═══════════════════ TOAST ═══════════════════ -->
 <div id="toast"></div>
-
-<!-- ═══════════════════ MODAL: FICHAS IR ═══════════════════ -->
-<div class="overlay hidden" id="ov-fichas">
-  <div class="modal-fichas">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
-      <h3 style="font-size:16px">📊 Resumo por Fichas do IR</h3>
-      <button class="btn btn-ghost" onclick="fechar('ov-fichas')">✕ Fechar</button>
-    </div>
-    <div id="fichas-content"></div>
-  </div>
-</div>
-
-<!-- ═══════════════════ MODAL: CONFIG API ═══════════════════ -->
-<div class="overlay hidden" id="ov-cfg">
-  <div class="cfg-box">
-    <h3>🔑 Configurar API Key da Anthropic</h3>
-    <p>A chave é armazenada apenas neste navegador (localStorage) e nunca sai do seu computador.<br>
-    Obtenha sua chave em <a class="link" href="https://console.anthropic.com/" target="_blank">console.anthropic.com</a></p>
-    <div class="fg">
-      <label>Anthropic API Key</label>
-      <input type="password" id="cfg-key" placeholder="sk-ant-api03-...">
-    </div>
-    <div class="modal-acts">
-      <button class="btn btn-ghost" onclick="fechar('ov-cfg')">Cancelar</button>
-      <button class="btn btn-primary" onclick="salvarApiKey()">Salvar</button>
-    </div>
-  </div>
-</div>
 
 <!-- ═══════════════════ MODAL: NOVO CLIENTE ═══════════════════ -->
 <div class="overlay hidden" id="ov-cliente">
@@ -287,26 +228,6 @@ let clienteAtivo = null;
 let docEditando = null;
 
 function salvarDB() { localStorage.setItem('ir_db', JSON.stringify(DB)); }
-
-// ── API Key ─────────────────────────────────────────
-function getApiKey() { return localStorage.getItem('anthropic_key') || ''; }
-function salvarApiKey() {
-  const k = document.getElementById('cfg-key').value.trim();
-  if (!k) { toast('Informe a chave', 'err'); return; }
-  localStorage.setItem('anthropic_key', k);
-  fechar('ov-cfg');
-  atualizarStatusApi();
-  toast('API Key salva!', 'ok');
-}
-function atualizarStatusApi() {
-  const k = getApiKey();
-  document.getElementById('api-dot').className = k ? 'dot' : 'dot off';
-  document.getElementById('api-label').textContent = k ? 'API Key configurada' : 'Configurar API Key';
-}
-function abrirConfig() {
-  document.getElementById('cfg-key').value = getApiKey();
-  abrir('ov-cfg');
-}
 
 // ════════════════════════════════════════════════════
 // CLIENTES
@@ -401,7 +322,6 @@ function renderMain() {
       <div class="card-header">
         <h3>👤 ${clienteAtivo.nome} · ${clienteAtivo.ano}</h3>
         <div class="card-actions">
-          <button class="btn btn-primary" onclick="abrirFichas()">📊 Fichas IR</button>
           <button class="btn btn-verde" onclick="exportarExcel()">⬇ Excel</button>
           <button class="btn btn-vermelho btn-ghost" onclick="removerCliente('${clienteAtivo.id}')">Remover</button>
         </div>
@@ -411,13 +331,7 @@ function renderMain() {
 
     <!-- Upload -->
     <div class="card">
-      <div class="card-header">
-        <h3>📁 Documentos</h3>
-        <div style="display:flex;gap:6px">
-          <button class="btn btn-verde" style="font-size:11px" onclick="marcarTodosRevisados()">✓ Marcar todos revisados</button>
-          <button class="btn btn-vermelho" style="font-size:11px" onclick="limparErros()">✕ Limpar erros</button>
-        </div>
-      </div>
+      <div class="card-header"><h3>📁 Documentos</h3></div>
       <div class="drop-zone" id="drop-zone"
            ondragover="dzOver(event)" ondragleave="dzLeave()" ondrop="dzDrop(event)"
            onclick="document.getElementById('file-in').click()">
@@ -506,67 +420,43 @@ function dzLeave() { document.getElementById('drop-zone').classList.remove('over
 function dzDrop(e) { e.preventDefault(); dzLeave(); processarArquivos(e.dataTransfer.files); }
 
 async function processarArquivos(files) {
-  if (!getApiKey()) { toast('Configure a API Key primeiro', 'err'); abrirConfig(); return; }
   const lista = document.getElementById('doc-list');
-  const fila = [];
 
-  let duplicatas = 0;
   for (const file of files) {
     const ext = file.name.split('.').pop().toLowerCase();
     if (!['pdf','png','jpg','jpeg'].includes(ext)) continue;
 
-    // Verifica duplicata por nome + tamanho dentro do mesmo cliente
-    const jaExiste = DB.docs.some(d =>
-      d.clienteId === clienteAtivo.id &&
-      d.nome === file.name &&
-      d.tamanho === file.size
-    );
-    if (jaExiste) { duplicatas++; continue; }
-
+    // Cria doc no estado
     const doc = {
       id: Date.now().toString() + Math.random().toString(36).slice(2),
       clienteId: clienteAtivo.id,
       nome: file.name,
       tipo: null,
-      status: 'aguardando',
-      progresso: 0,
-      progLabel: 'Na fila…',
+      status: 'processando',
+      progresso: 10,
+      progLabel: 'Lendo documento…',
       dados: null,
       revisado: false,
       obs: '',
       addedAt: new Date().toISOString(),
       erroMsg: null,
-      tamanho: file.size,
     };
     DB.docs.push(doc);
     salvarDB();
 
+    // Adiciona linha na UI
     const row = document.createElement('div');
     row.id = `doc-${doc.id}`;
     row.className = 'doc-row';
     lista.appendChild(row);
     atualizarDocRow(doc);
 
-    fila.push({ doc, file });
-  }
-
-  if (duplicatas > 0) toast(`${duplicatas} arquivo(s) ignorado(s) por já existirem neste cliente`, 'info');
-  if (!fila.length) return;
-
-  // Processa um por vez — em caso de rate limit, aguarda e retenta automaticamente
-  for (let i = 0; i < fila.length; i++) {
-    const { doc, file } = fila[i];
-    doc.status = 'processando';
-    doc.progresso = 10;
-    doc.progLabel = `Processando (${i+1}/${fila.length})…`;
-    atualizarDocRow(doc);
-    await processarComClaude(doc, file);
-    if (i < fila.length - 1) await new Promise(r => setTimeout(r, 3000));
+    // Processa em background
+    processarComClaude(doc, file);
   }
 }
 
 async function reprocessar(docId) {
-  if (!getApiKey()) { toast('Configure a API Key primeiro', 'err'); return; }
   const doc = DB.docs.find(d => d.id === docId);
   if (!doc) return;
   // Precisamos do arquivo original — não temos mais. Informa ao usuário.
@@ -602,12 +492,12 @@ async function processarComClaude(doc, file) {
     setProgresso(doc, 40, 'Classificando documento…');
 
     // 2. Classificar
-    const tipo = await chamarClaude(buildMsgClassificar(base64, mediaType, texto), doc);
+    const tipo = await chamarClaude(buildMsgClassificar(base64, mediaType, texto));
     doc.tipo = tipo;
     setProgresso(doc, 60, `Extraindo dados: ${TIPO_LABEL[tipo] || tipo}…`);
 
     // 3. Extrair dados
-    const dados = await chamarClaude(buildMsgExtrair(base64, mediaType, texto, tipo), doc);
+    const dados = await chamarClaude(buildMsgExtrair(base64, mediaType, texto, tipo));
     doc.dados = dados;
     doc.status = 'ok';
     doc.progresso = 100;
@@ -678,47 +568,26 @@ function buildMsgExtrair(b64, mime, texto, tipo) {
   return [{ role: 'user', content }];
 }
 
-function isRateLimit(status, msg) {
-  return status === 429 || (msg || '').toLowerCase().includes('rate limit') || (msg || '').includes('10,000');
-}
-
-async function aguardarRateLimit(doc, segundos) {
-  let restante = segundos;
-  toast(`⏳ Limite de tokens atingido. Aguardando ${segundos}s automaticamente…`, 'info');
-  while (restante > 0) {
-    setProgresso(doc, doc.progresso, `⏳ Limite atingido — continuando em ${restante}s…`);
-    await new Promise(r => setTimeout(r, 1000));
-    restante--;
-  }
-  setProgresso(doc, doc.progresso, 'Retomando processamento…');
-}
-
-async function chamarClaude(messages, doc, tentativa = 1) {
+async function chamarClaude(messages) {
   const resp = await fetch('/api/claude', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ apiKey: getApiKey(), messages }),
+    body: JSON.stringify({ messages }),
   });
-
-  // Lê o body uma única vez
-  const data = await resp.json();
-  const errMsg = data.error?.message || '';
-
-  // Detecta rate limit tanto pelo status HTTP quanto pelo texto do erro
-  if (isRateLimit(resp.status, errMsg)) {
-    if (tentativa > 8) throw new Error('Limite de tentativas esgotado. Tente novamente mais tarde.');
-    await aguardarRateLimit(doc, 62);
-    return chamarClaude(messages, doc, tentativa + 1);
+  if (!resp.ok) {
+    const e = await resp.json();
+    throw new Error(e.error?.message || `HTTP ${resp.status}`);
   }
-
-  if (!resp.ok) throw new Error(errMsg || `HTTP ${resp.status}`);
-
+  const data = await resp.json();
   let texto = data.content[0].text.trim();
-  if (texto.startsWith('```')) texto = texto.split('\n').slice(1, -1).join('\n');
+  // Remove blocos markdown se houver
+  if (texto.startsWith('```')) texto = texto.split('\n').slice(1,-1).join('\n');
+  // Para classificação, retorna string do tipo
   try {
     const parsed = JSON.parse(texto);
-    return parsed.tipo || parsed;
+    return parsed.tipo || parsed; // classificação retorna string, extração retorna objeto
   } catch {
+    // Tenta extrair JSON de dentro do texto
     const m = texto.match(/\{[\s\S]*\}/);
     if (m) return JSON.parse(m[0]);
     return texto;
@@ -754,32 +623,6 @@ function salvarDados() {
 // ════════════════════════════════════════════════════
 // REMOVER DOC
 // ════════════════════════════════════════════════════
-function marcarTodosRevisados() {
-  const pendentes = DB.docs.filter(d => d.clienteId === clienteAtivo.id && d.dados && d.status === 'ok');
-  if (!pendentes.length) { toast('Nenhum documento pendente de revisão', 'info'); return; }
-  pendentes.forEach(d => {
-    d.revisado = true;
-    d.status = 'revisado';
-    atualizarDocRow(d);
-  });
-  salvarDB();
-  renderSidebar();
-  toast(`${pendentes.length} documento(s) marcados como revisados ✓`, 'ok');
-}
-
-function limparErros() {
-  const erros = DB.docs.filter(d => d.clienteId === clienteAtivo.id && d.status === 'erro');
-  if (!erros.length) { toast('Nenhum erro para limpar', 'info'); return; }
-  erros.forEach(d => {
-    DB.docs = DB.docs.filter(x => x.id !== d.id);
-    const el = document.getElementById(`doc-${d.id}`);
-    if (el) el.remove();
-  });
-  salvarDB();
-  renderSidebar();
-  toast(`${erros.length} documento(s) com erro removidos`, 'ok');
-}
-
 function removerDoc(docId) {
   if (!confirm('Remover este documento?')) return;
   DB.docs = DB.docs.filter(d => d.id !== docId);
@@ -944,332 +787,10 @@ function toast(msg, tipo='info') {
 
 // Fechar overlay clicando fora
 document.querySelectorAll('.overlay').forEach(o => o.addEventListener('click', e => { if (e.target === o) o.classList.add('hidden'); }));
-document.getElementById('ov-fichas').addEventListener('click', e => { if (e.target === document.getElementById('ov-fichas')) fechar('ov-fichas'); });
-
-// ════════════════════════════════════════════════════
-// FICHAS IR — RESUMO + TOTALIZADORES + CHECKLIST
-// ════════════════════════════════════════════════════
-function abrirFichas() {
-  const docs = DB.docs.filter(d => d.clienteId === clienteAtivo.id && d.dados && ['ok','revisado'].includes(d.status));
-  document.getElementById('fichas-content').innerHTML = gerarFichasHTML(docs);
-  abrir('ov-fichas');
-}
-
-function fmt(v) {
-  return (v||0).toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
-}
-
-function gerarFichasHTML(docs) {
-  const informes = docs.filter(d => d.tipo === 'informe_rendimentos');
-  const medicos  = docs.filter(d => d.tipo === 'recibo_medico');
-  const educacao = docs.filter(d => d.tipo === 'recibo_educacao');
-  const notas    = docs.filter(d => d.tipo === 'nota_corretagem');
-
-  // Totais
-  const totRendTrib   = informes.reduce((s,d) => s + (d.dados.rendimentos_tributaveis||0), 0);
-  const totIRRF       = informes.reduce((s,d) => s + (d.dados.irrf_retido||0), 0);
-  const totPrevOfic   = informes.reduce((s,d) => s + (d.dados.previdencia_oficial||0), 0);
-  const totPrevPriv   = informes.reduce((s,d) => s + (d.dados.previdencia_privada||0), 0);
-  const totIsentos    = informes.reduce((s,d) => s + (d.dados.rendimentos_isentos||0), 0);
-  const totMedicos    = medicos.reduce((s,d)  => s + (d.dados.valor_pago||0), 0);
-  const totEducacao   = educacao.reduce((s,d) => s + (d.dados.valor_pago||0), 0);
-
-  let html = '';
-
-  // ── Ficha 1: Rendimentos Tributáveis de PJ ──
-  html += `<div class="ficha-card">
-    <div class="ficha-header">
-      <span class="ficha-num">Ficha 1</span>
-      <h4>Rendimentos Tributáveis Recebidos de Pessoa Jurídica</h4>
-      <span class="ficha-total">${fmt(totRendTrib)}</span>
-    </div>`;
-  if (informes.length) {
-    html += `<table class="ficha-table">
-      <tr><th>Fonte Pagadora</th><th>CNPJ</th><th>Rend. Tributáveis</th><th>IRRF Retido</th><th>Prev. Oficial</th><th>Prev. Privada</th></tr>`;
-    informes.forEach(d => {
-      const j = d.dados;
-      html += `<tr>
-        <td>${j.fonte_pagadora?.nome||'—'}</td>
-        <td>${j.fonte_pagadora?.cnpj||'—'}</td>
-        <td>${fmt(j.rendimentos_tributaveis)}</td>
-        <td>${fmt(j.irrf_retido)}</td>
-        <td>${fmt(j.previdencia_oficial)}</td>
-        <td>${fmt(j.previdencia_privada)}</td>
-      </tr>`;
-    });
-    html += `<tr class="ficha-total-row">
-      <td colspan="2"><strong>TOTAL</strong></td>
-      <td><strong>${fmt(totRendTrib)}</strong></td>
-      <td><strong>${fmt(totIRRF)}</strong></td>
-      <td><strong>${fmt(totPrevOfic)}</strong></td>
-      <td><strong>${fmt(totPrevPriv)}</strong></td>
-    </tr></table>`;
-  } else {
-    html += `<div class="ficha-empty">Nenhum informe de rendimentos carregado</div>`;
-  }
-  if (totIsentos > 0) {
-    html += `<div style="padding:8px 14px;font-size:12px;background:#fffbeb;border-top:1px solid var(--borda)">
-      ⚡ Rendimentos Isentos/Não Tributáveis: <strong>${fmt(totIsentos)}</strong> — lançar na Ficha de Rendimentos Isentos
-    </div>`;
-  }
-  html += `</div>`;
-
-  // ── Ficha 2: Pagamentos Médicos ──
-  html += `<div class="ficha-card">
-    <div class="ficha-header">
-      <span class="ficha-num">Ficha 2</span>
-      <h4>Pagamentos Efetuados — Despesas Médicas</h4>
-      <span class="ficha-total">${fmt(totMedicos)}</span>
-    </div>`;
-  if (medicos.length) {
-    // Agrupar por prestador
-    const porPrestador = {};
-    medicos.forEach(d => {
-      const j = d.dados;
-      const chave = j.prestador?.cpf_cnpj || j.prestador?.nome || 'Desconhecido';
-      if (!porPrestador[chave]) porPrestador[chave] = { nome: j.prestador?.nome||'—', cpf_cnpj: chave, crm: j.prestador?.crm_cro||'', especialidade: j.prestador?.especialidade||'', total: 0, count: 0 };
-      porPrestador[chave].total += (j.valor_pago||0);
-      porPrestador[chave].count++;
-    });
-    html += `<table class="ficha-table">
-      <tr><th>Prestador</th><th>CPF/CNPJ</th><th>CRM/CRO</th><th>Especialidade</th><th>Qtd. Recibos</th><th>Total Pago</th></tr>`;
-    Object.values(porPrestador).forEach(p => {
-      html += `<tr>
-        <td>${p.nome}</td><td>${p.cpf_cnpj}</td><td>${p.crm||'—'}</td>
-        <td>${p.especialidade||'—'}</td><td style="text-align:center">${p.count}</td>
-        <td>${fmt(p.total)}</td>
-      </tr>`;
-    });
-    html += `<tr class="ficha-total-row">
-      <td colspan="5"><strong>TOTAL DEDUTÍVEL</strong></td>
-      <td><strong>${fmt(totMedicos)}</strong></td>
-    </tr></table>`;
-  } else {
-    html += `<div class="ficha-empty">Nenhum recibo médico carregado</div>`;
-  }
-  html += `</div>`;
-
-  // ── Ficha 3: Instrução (Educação) ──
-  html += `<div class="ficha-card">
-    <div class="ficha-header">
-      <span class="ficha-num">Ficha 3</span>
-      <h4>Pagamentos Efetuados — Instrução</h4>
-      <span class="ficha-total">${fmt(totEducacao)}</span>
-    </div>`;
-  if (educacao.length) {
-    html += `<table class="ficha-table">
-      <tr><th>Instituição</th><th>CNPJ</th><th>Aluno</th><th>Parentesco</th><th>Nível</th><th>Total Pago</th></tr>`;
-    educacao.forEach(d => {
-      const j = d.dados;
-      html += `<tr>
-        <td>${j.instituicao?.nome||'—'}</td><td>${j.instituicao?.cnpj||'—'}</td>
-        <td>${j.aluno?.nome||'—'}</td><td>${j.aluno?.parentesco||'—'}</td>
-        <td>${j.nivel_ensino||'—'}</td><td>${fmt(j.valor_pago)}</td>
-      </tr>`;
-    });
-    html += `<tr class="ficha-total-row">
-      <td colspan="5"><strong>TOTAL DEDUTÍVEL</strong></td>
-      <td><strong>${fmt(totEducacao)}</strong></td>
-    </tr></table>
-    <div style="padding:8px 14px;font-size:11px;color:var(--amarelo);background:var(--amarelo-bg);border-top:1px solid var(--borda)">
-      ⚠️ Limite de dedução com educação: R$ 3.561,50 por pessoa (ano-calendário 2024/2025)
-    </div>`;
-  } else {
-    html += `<div class="ficha-empty">Nenhum recibo de educação carregado</div>`;
-  }
-  html += `</div>`;
-
-  // ── Ficha 4: Renda Variável ──
-  html += `<div class="ficha-card">
-    <div class="ficha-header">
-      <span class="ficha-num">Ficha 4</span>
-      <h4>Renda Variável — Operações em Bolsa</h4>
-      <span class="ficha-total">${notas.length} nota(s)</span>
-    </div>`;
-  if (notas.length) {
-    html += `<table class="ficha-table">
-      <tr><th>Corretora</th><th>Data</th><th>Operações</th><th>Total Taxas</th><th>Valor Líquido</th></tr>`;
-    notas.forEach(d => {
-      const j = d.dados;
-      html += `<tr>
-        <td>${j.corretora?.nome||'—'}</td>
-        <td>${j.data_pregao||'—'}</td>
-        <td style="text-align:center">${(j.operacoes||[]).length}</td>
-        <td>${fmt(j.taxas?.total||j.taxas?.total_taxas)}</td>
-        <td>${fmt(j.valor_liquido)}</td>
-      </tr>`;
-    });
-    html += `</table>`;
-  } else {
-    html += `<div class="ficha-empty">Nenhuma nota de corretagem carregada</div>`;
-  }
-  html += `</div>`;
-
-  // ── Checklist de documentos ──
-  html += `<div class="ficha-card">
-    <div class="ficha-header">
-      <span class="ficha-num" style="background:var(--verde)">✓</span>
-      <h4>Checklist de Documentos</h4>
-    </div>
-    <div style="padding:12px 14px">
-    <ul class="chk-list">`;
-
-  const chks = [
-    { ok: informes.length > 0, titulo: 'Informes de Rendimentos', desc: informes.length > 0 ? `${informes.length} informe(s) carregado(s) — ${informes.map(d=>d.dados.fonte_pagadora?.nome||'?').join(', ')}` : 'Faltam informes de empregadores, bancos, corretoras e previdência' },
-    { ok: informes.some(d => (d.dados.irrf_retido||0) > 0), titulo: 'IRRF Retido na Fonte', desc: informes.some(d => (d.dados.irrf_retido||0) > 0) ? `Total retido: ${fmt(totIRRF)}` : 'Nenhum IRRF retido identificado nos informes' },
-    { ok: informes.some(d => (d.dados.previdencia_oficial||0) > 0), titulo: 'Previdência Oficial (INSS)', desc: informes.some(d => (d.dados.previdencia_oficial||0) > 0) ? `Total: ${fmt(totPrevOfic)}` : 'Nenhuma contribuição ao INSS identificada' },
-    { ok: medicos.length > 0, titulo: 'Recibos Médicos / Plano de Saúde', desc: medicos.length > 0 ? `${medicos.length} recibo(s) — Total: ${fmt(totMedicos)}` : 'Nenhum recibo médico carregado' },
-    { ok: educacao.length > 0, titulo: 'Recibos de Educação', desc: educacao.length > 0 ? `${educacao.length} recibo(s) — Total: ${fmt(totEducacao)}` : 'Nenhum comprovante de educação carregado' },
-    { ok: notas.length > 0, titulo: 'Notas de Corretagem (Renda Variável)', desc: notas.length > 0 ? `${notas.length} nota(s) carregada(s)` : 'Nenhuma nota de corretagem — se operar em bolsa, inclua todas do ano' },
-    { ok: informes.some(d => (d.dados.previdencia_privada||0) > 0), titulo: 'Previdência Privada (PGBL)', titulo2: 'Dedutível até 12% da renda bruta', desc: informes.some(d => (d.dados.previdencia_privada||0) > 0) ? `Total: ${fmt(totPrevPriv)}` : 'Nenhuma contribuição a PGBL identificada' },
-  ];
-
-  chks.forEach(c => {
-    const ic = c.ok ? '✅' : '⚠️';
-    html += `<li class="chk-item">
-      <span class="chk-ic">${ic}</span>
-      <div class="chk-txt">
-        <strong>${c.titulo}${c.titulo2 ? ` <span style="font-weight:400;color:var(--texto2)">— ${c.titulo2}</span>` : ''}</strong>
-        <span>${c.desc}</span>
-      </div>
-    </li>`;
-  });
-
-  html += `</ul></div></div>`;
-
-  // ── Resumo final de deduções ──
-  // ── Cálculo do Imposto ──
-  // Tabelas progressivas por ano-calendário
-  const TABELAS = {
-    2024: {
-      faixas: [
-        { ate: 26963.20, aliq: 0,    deducao: 0 },
-        { ate: 33919.80, aliq: 0.075, deducao: 2022.24 },
-        { ate: 45012.60, aliq: 0.15,  deducao: 4566.23 },
-        { ate: 55976.16, aliq: 0.225, deducao: 7942.17 },
-        { ate: Infinity, aliq: 0.275, deducao: 10740.98 },
-      ],
-      limiteEducacao: 3561.50,
-      limiteSimplificado: 16754.34,
-      descSimplificado: 0.20,
-    },
-    2025: {
-      faixas: [
-        { ate: 33888.00, aliq: 0,    deducao: 0 },
-        { ate: 45012.60, aliq: 0.075, deducao: 2533.49 },
-        { ate: 55976.16, aliq: 0.15,  deducao: 5957.27 },
-        { ate: 82889.90, aliq: 0.225, deducao: 10143.48 },
-        { ate: Infinity, aliq: 0.275, deducao: 14288.98 },
-      ],
-      limiteEducacao: 3561.50,
-      limiteSimplificado: 16754.34,
-      descSimplificado: 0.20,
-    },
-  };
-
-  const tabela = TABELAS[clienteAtivo.ano] || TABELAS[2024];
-
-  function calcImposto(base) {
-    if (base <= 0) return 0;
-    for (const f of tabela.faixas) {
-      if (base <= f.ate) return Math.max(0, base * f.aliq - f.deducao);
-    }
-    return 0;
-  }
-
-  // Modelo Completo
-  const dedEducLimitada = Math.min(totEducacao, tabela.limiteEducacao);
-  const dedPrevPrivLimitada = Math.min(totPrevPriv, totRendTrib * 0.12);
-  const totalDeducoesCompleto = totPrevOfic + dedPrevPrivLimitada + totMedicos + dedEducLimitada;
-  const baseCompleto = Math.max(0, totRendTrib - totalDeducoesCompleto);
-  const impostoCompleto = calcImposto(baseCompleto);
-  const resultadoCompleto = impostoCompleto - totIRRF;
-
-  // Modelo Simplificado
-  const descSimplif = Math.min(totRendTrib * tabela.descSimplificado, tabela.limiteSimplificado);
-  const baseSimplif = Math.max(0, totRendTrib - descSimplif);
-  const impostoSimplif = calcImposto(baseSimplif);
-  const resultadoSimplif = impostoSimplif - totIRRF;
-
-  // Qual modelo é mais vantajoso?
-  const melhorModelo = resultadoCompleto <= resultadoSimplif ? 'completo' : 'simplificado';
-  const melhorResultado = Math.min(resultadoCompleto, resultadoSimplif);
-  const paga = melhorResultado > 0;
-
-  // Card principal — destaque visual
-  const corCard = paga ? '#C62828' : '#1A7A4A';
-  const bgCard  = paga ? '#FDE8E8' : '#E6F4ED';
-  const emoji   = paga ? '⚠️' : '✅';
-  const verbo   = paga ? 'PAGAR' : 'RESTITUIR';
-
-  html += `
-  <div style="border:3px solid ${corCard};background:${bgCard};border-radius:12px;padding:20px;margin-top:4px;margin-bottom:16px">
-    <div style="text-align:center;margin-bottom:16px">
-      <div style="font-size:40px;margin-bottom:6px">${emoji}</div>
-      <div style="font-size:14px;font-weight:600;color:${corCard};text-transform:uppercase;letter-spacing:1px">Estimativa: vai ${verbo}</div>
-      <div style="font-size:32px;font-weight:800;color:${corCard};margin-top:4px">${fmt(Math.abs(melhorResultado))}</div>
-      <div style="font-size:11px;color:var(--texto2);margin-top:4px">Usando o modelo ${melhorModelo === 'completo' ? 'completo (deduções legais)' : 'simplificado (desconto de ${(tabela.descSimplificado*100).toFixed(0)}%)'} — mais vantajoso para este caso</div>
-    </div>
-
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px">
-
-      <!-- Modelo Completo -->
-      <div style="background:#fff;border-radius:8px;padding:12px;border:2px solid ${melhorModelo==='completo'?corCard:'var(--borda)'}">
-        <div style="font-weight:700;font-size:12px;margin-bottom:8px;display:flex;align-items:center;gap:5px">
-          📋 Modelo Completo ${melhorModelo==='completo'?'<span style="background:'+corCard+';color:#fff;font-size:10px;padding:1px 6px;border-radius:8px">Recomendado</span>':''}
-        </div>
-        <div style="display:flex;flex-direction:column;gap:4px;color:var(--texto2)">
-          <div style="display:flex;justify-content:space-between"><span>Rend. Tributáveis</span><strong style="color:var(--texto)">${fmt(totRendTrib)}</strong></div>
-          <div style="display:flex;justify-content:space-between"><span>(-) INSS</span><strong style="color:var(--verde)">-${fmt(totPrevOfic)}</strong></div>
-          <div style="display:flex;justify-content:space-between"><span>(-) PGBL (até 12%)</span><strong style="color:var(--verde)">-${fmt(dedPrevPrivLimitada)}</strong></div>
-          <div style="display:flex;justify-content:space-between"><span>(-) Médico</span><strong style="color:var(--verde)">-${fmt(totMedicos)}</strong></div>
-          <div style="display:flex;justify-content:space-between"><span>(-) Educação</span><strong style="color:var(--verde)">-${fmt(dedEducLimitada)}</strong></div>
-          <div style="border-top:1px solid var(--borda);margin:4px 0"></div>
-          <div style="display:flex;justify-content:space-between"><span>Base de cálculo</span><strong style="color:var(--texto)">${fmt(baseCompleto)}</strong></div>
-          <div style="display:flex;justify-content:space-between"><span>Imposto calculado</span><strong style="color:var(--texto)">${fmt(impostoCompleto)}</strong></div>
-          <div style="display:flex;justify-content:space-between"><span>(-) IRRF retido</span><strong style="color:var(--verde)">-${fmt(totIRRF)}</strong></div>
-          <div style="border-top:2px solid var(--borda);margin:4px 0"></div>
-          <div style="display:flex;justify-content:space-between;font-size:13px">
-            <span style="font-weight:700">${resultadoCompleto > 0 ? 'A PAGAR' : 'A RESTITUIR'}</span>
-            <strong style="color:${resultadoCompleto > 0 ? 'var(--vermelho)' : 'var(--verde)'};font-size:14px">${fmt(Math.abs(resultadoCompleto))}</strong>
-          </div>
-        </div>
-      </div>
-
-      <!-- Modelo Simplificado -->
-      <div style="background:#fff;border-radius:8px;padding:12px;border:2px solid ${melhorModelo==='simplificado'?corCard:'var(--borda)'}">
-        <div style="font-weight:700;font-size:12px;margin-bottom:8px;display:flex;align-items:center;gap:5px">
-          📄 Modelo Simplificado ${melhorModelo==='simplificado'?'<span style="background:'+corCard+';color:#fff;font-size:10px;padding:1px 6px;border-radius:8px">Recomendado</span>':''}
-        </div>
-        <div style="display:flex;flex-direction:column;gap:4px;color:var(--texto2)">
-          <div style="display:flex;justify-content:space-between"><span>Rend. Tributáveis</span><strong style="color:var(--texto)">${fmt(totRendTrib)}</strong></div>
-          <div style="display:flex;justify-content:space-between"><span>(-) Desconto padrão 20%</span><strong style="color:var(--verde)">-${fmt(descSimplif)}</strong></div>
-          <div style="font-size:10px;color:var(--texto2);margin-top:-2px">limite ${fmt(tabela.limiteSimplificado)}</div>
-          <div style="border-top:1px solid var(--borda);margin:4px 0"></div>
-          <div style="display:flex;justify-content:space-between"><span>Base de cálculo</span><strong style="color:var(--texto)">${fmt(baseSimplif)}</strong></div>
-          <div style="display:flex;justify-content:space-between"><span>Imposto calculado</span><strong style="color:var(--texto)">${fmt(impostoSimplif)}</strong></div>
-          <div style="display:flex;justify-content:space-between"><span>(-) IRRF retido</span><strong style="color:var(--verde)">-${fmt(totIRRF)}</strong></div>
-          <div style="border-top:2px solid var(--borda);margin:4px 0"></div>
-          <div style="display:flex;justify-content:space-between;font-size:13px">
-            <span style="font-weight:700">${resultadoSimplif > 0 ? 'A PAGAR' : 'A RESTITUIR'}</span>
-            <strong style="color:${resultadoSimplif > 0 ? 'var(--vermelho)' : 'var(--verde)'};font-size:14px">${fmt(Math.abs(resultadoSimplif))}</strong>
-          </div>
-        </div>
-      </div>
-
-    </div>
-    <div style="margin-top:12px;font-size:11px;color:var(--texto2);text-align:center">
-      ⚠️ Estimativa com base nos documentos carregados. Não considera dependentes, outras deduções ou rendimentos não informados. Sujeito a conferência pelo contador.
-    </div>
-  </div>`;
-
-  return html;
-}
 
 // ════════════════════════════════════════════════════
 // INIT
 // ════════════════════════════════════════════════════
-atualizarStatusApi();
 renderSidebar();
 </script>
 </body>
