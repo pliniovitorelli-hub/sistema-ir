@@ -6,11 +6,13 @@ exports.handler = async function(event) {
   }
 
   try {
-    const { apiKey, messages } = JSON.parse(event.body);
+    const apiKey = process.env.ANTHROPIC_API_KEY;
 
     if (!apiKey) {
-      return { statusCode: 400, body: JSON.stringify({ error: 'API key nao fornecida' }) };
+      return { statusCode: 500, body: JSON.stringify({ error: 'API key nao configurada no servidor' }) };
     }
+
+    const { messages } = JSON.parse(event.body);
 
     const payload = JSON.stringify({
       model: 'claude-opus-4-6',
