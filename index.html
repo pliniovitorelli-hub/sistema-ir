@@ -1104,16 +1104,128 @@ function gerarFichasHTML(docs) {
   html += `</ul></div></div>`;
 
   // ── Resumo final de deduções ──
-  const totalDedutivel = totMedicos + Math.min(totEducacao, 3561.50 * (educacao.length > 0 ? 1 : 0)) + totPrevOfic + totPrevPriv;
-  html += `<div style="background:var(--azul);color:#fff;border-radius:8px;padding:16px;margin-top:4px">
-    <div style="font-size:13px;font-weight:600;margin-bottom:10px">💡 Resumo para o PGD</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">
-      <div>Rendimentos Tributáveis: <strong>${fmt(totRendTrib)}</strong></div>
-      <div>IRRF Retido: <strong>${fmt(totIRRF)}</strong></div>
-      <div>Deduções Médicas: <strong>${fmt(totMedicos)}</strong></div>
-      <div>Deduções Educação: <strong>${fmt(Math.min(totEducacao, 3561.50))}</strong></div>
-      <div>Prev. Oficial: <strong>${fmt(totPrevOfic)}</strong></div>
-      <div>Prev. Privada (PGBL): <strong>${fmt(totPrevPriv)}</strong></div>
+  // ── Cálculo do Imposto ──
+  // Tabelas progressivas por ano-calendário
+  const TABELAS = {
+    2024: {
+      faixas: [
+        { ate: 26963.20, aliq: 0,    deducao: 0 },
+        { ate: 33919.80, aliq: 0.075, deducao: 2022.24 },
+        { ate: 45012.60, aliq: 0.15,  deducao: 4566.23 },
+        { ate: 55976.16, aliq: 0.225, deducao: 7942.17 },
+        { ate: Infinity, aliq: 0.275, deducao: 10740.98 },
+      ],
+      limiteEducacao: 3561.50,
+      limiteSimplificado: 16754.34,
+      descSimplificado: 0.20,
+    },
+    2025: {
+      faixas: [
+        { ate: 33888.00, aliq: 0,    deducao: 0 },
+        { ate: 45012.60, aliq: 0.075, deducao: 2533.49 },
+        { ate: 55976.16, aliq: 0.15,  deducao: 5957.27 },
+        { ate: 82889.90, aliq: 0.225, deducao: 10143.48 },
+        { ate: Infinity, aliq: 0.275, deducao: 14288.98 },
+      ],
+      limiteEducacao: 3561.50,
+      limiteSimplificado: 16754.34,
+      descSimplificado: 0.20,
+    },
+  };
+
+  const tabela = TABELAS[clienteAtivo.ano] || TABELAS[2024];
+
+  function calcImposto(base) {
+    if (base <= 0) return 0;
+    for (const f of tabela.faixas) {
+      if (base <= f.ate) return Math.max(0, base * f.aliq - f.deducao);
+    }
+    return 0;
+  }
+
+  // Modelo Completo
+  const dedEducLimitada = Math.min(totEducacao, tabela.limiteEducacao);
+  const dedPrevPrivLimitada = Math.min(totPrevPriv, totRendTrib * 0.12);
+  const totalDeducoesCompleto = totPrevOfic + dedPrevPrivLimitada + totMedicos + dedEducLimitada;
+  const baseCompleto = Math.max(0, totRendTrib - totalDeducoesCompleto);
+  const impostoCompleto = calcImposto(baseCompleto);
+  const resultadoCompleto = impostoCompleto - totIRRF;
+
+  // Modelo Simplificado
+  const descSimplif = Math.min(totRendTrib * tabela.descSimplificado, tabela.limiteSimplificado);
+  const baseSimplif = Math.max(0, totRendTrib - descSimplif);
+  const impostoSimplif = calcImposto(baseSimplif);
+  const resultadoSimplif = impostoSimplif - totIRRF;
+
+  // Qual modelo é mais vantajoso?
+  const melhorModelo = resultadoCompleto <= resultadoSimplif ? 'completo' : 'simplificado';
+  const melhorResultado = Math.min(resultadoCompleto, resultadoSimplif);
+  const paga = melhorResultado > 0;
+
+  // Card principal — destaque visual
+  const corCard = paga ? '#C62828' : '#1A7A4A';
+  const bgCard  = paga ? '#FDE8E8' : '#E6F4ED';
+  const emoji   = paga ? '⚠️' : '✅';
+  const verbo   = paga ? 'PAGAR' : 'RESTITUIR';
+
+  html += `
+  <div style="border:3px solid ${corCard};background:${bgCard};border-radius:12px;padding:20px;margin-top:4px;margin-bottom:16px">
+    <div style="text-align:center;margin-bottom:16px">
+      <div style="font-size:40px;margin-bottom:6px">${emoji}</div>
+      <div style="font-size:14px;font-weight:600;color:${corCard};text-transform:uppercase;letter-spacing:1px">Estimativa: vai ${verbo}</div>
+      <div style="font-size:32px;font-weight:800;color:${corCard};margin-top:4px">${fmt(Math.abs(melhorResultado))}</div>
+      <div style="font-size:11px;color:var(--texto2);margin-top:4px">Usando o modelo ${melhorModelo === 'completo' ? 'completo (deduções legais)' : 'simplificado (desconto de ${(tabela.descSimplificado*100).toFixed(0)}%)'} — mais vantajoso para este caso</div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px">
+
+      <!-- Modelo Completo -->
+      <div style="background:#fff;border-radius:8px;padding:12px;border:2px solid ${melhorModelo==='completo'?corCard:'var(--borda)'}">
+        <div style="font-weight:700;font-size:12px;margin-bottom:8px;display:flex;align-items:center;gap:5px">
+          📋 Modelo Completo ${melhorModelo==='completo'?'<span style="background:'+corCard+';color:#fff;font-size:10px;padding:1px 6px;border-radius:8px">Recomendado</span>':''}
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;color:var(--texto2)">
+          <div style="display:flex;justify-content:space-between"><span>Rend. Tributáveis</span><strong style="color:var(--texto)">${fmt(totRendTrib)}</strong></div>
+          <div style="display:flex;justify-content:space-between"><span>(-) INSS</span><strong style="color:var(--verde)">-${fmt(totPrevOfic)}</strong></div>
+          <div style="display:flex;justify-content:space-between"><span>(-) PGBL (até 12%)</span><strong style="color:var(--verde)">-${fmt(dedPrevPrivLimitada)}</strong></div>
+          <div style="display:flex;justify-content:space-between"><span>(-) Médico</span><strong style="color:var(--verde)">-${fmt(totMedicos)}</strong></div>
+          <div style="display:flex;justify-content:space-between"><span>(-) Educação</span><strong style="color:var(--verde)">-${fmt(dedEducLimitada)}</strong></div>
+          <div style="border-top:1px solid var(--borda);margin:4px 0"></div>
+          <div style="display:flex;justify-content:space-between"><span>Base de cálculo</span><strong style="color:var(--texto)">${fmt(baseCompleto)}</strong></div>
+          <div style="display:flex;justify-content:space-between"><span>Imposto calculado</span><strong style="color:var(--texto)">${fmt(impostoCompleto)}</strong></div>
+          <div style="display:flex;justify-content:space-between"><span>(-) IRRF retido</span><strong style="color:var(--verde)">-${fmt(totIRRF)}</strong></div>
+          <div style="border-top:2px solid var(--borda);margin:4px 0"></div>
+          <div style="display:flex;justify-content:space-between;font-size:13px">
+            <span style="font-weight:700">${resultadoCompleto > 0 ? 'A PAGAR' : 'A RESTITUIR'}</span>
+            <strong style="color:${resultadoCompleto > 0 ? 'var(--vermelho)' : 'var(--verde)'};font-size:14px">${fmt(Math.abs(resultadoCompleto))}</strong>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modelo Simplificado -->
+      <div style="background:#fff;border-radius:8px;padding:12px;border:2px solid ${melhorModelo==='simplificado'?corCard:'var(--borda)'}">
+        <div style="font-weight:700;font-size:12px;margin-bottom:8px;display:flex;align-items:center;gap:5px">
+          📄 Modelo Simplificado ${melhorModelo==='simplificado'?'<span style="background:'+corCard+';color:#fff;font-size:10px;padding:1px 6px;border-radius:8px">Recomendado</span>':''}
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;color:var(--texto2)">
+          <div style="display:flex;justify-content:space-between"><span>Rend. Tributáveis</span><strong style="color:var(--texto)">${fmt(totRendTrib)}</strong></div>
+          <div style="display:flex;justify-content:space-between"><span>(-) Desconto padrão 20%</span><strong style="color:var(--verde)">-${fmt(descSimplif)}</strong></div>
+          <div style="font-size:10px;color:var(--texto2);margin-top:-2px">limite ${fmt(tabela.limiteSimplificado)}</div>
+          <div style="border-top:1px solid var(--borda);margin:4px 0"></div>
+          <div style="display:flex;justify-content:space-between"><span>Base de cálculo</span><strong style="color:var(--texto)">${fmt(baseSimplif)}</strong></div>
+          <div style="display:flex;justify-content:space-between"><span>Imposto calculado</span><strong style="color:var(--texto)">${fmt(impostoSimplif)}</strong></div>
+          <div style="display:flex;justify-content:space-between"><span>(-) IRRF retido</span><strong style="color:var(--verde)">-${fmt(totIRRF)}</strong></div>
+          <div style="border-top:2px solid var(--borda);margin:4px 0"></div>
+          <div style="display:flex;justify-content:space-between;font-size:13px">
+            <span style="font-weight:700">${resultadoSimplif > 0 ? 'A PAGAR' : 'A RESTITUIR'}</span>
+            <strong style="color:${resultadoSimplif > 0 ? 'var(--vermelho)' : 'var(--verde)'};font-size:14px">${fmt(Math.abs(resultadoSimplif))}</strong>
+          </div>
+        </div>
+      </div>
+
+    </div>
+    <div style="margin-top:12px;font-size:11px;color:var(--texto2);text-align:center">
+      ⚠️ Estimativa com base nos documentos carregados. Não considera dependentes, outras deduções ou rendimentos não informados. Sujeito a conferência pelo contador.
     </div>
   </div>`;
 
